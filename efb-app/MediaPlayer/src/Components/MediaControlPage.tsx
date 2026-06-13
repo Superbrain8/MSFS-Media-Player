@@ -71,16 +71,21 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
     this.selectedSub.set(index);
   }
 
-  /** Pick + start a station (also used by Next/Prev). */
+  /** Tapping a station starts it; tapping the selected one again stops + deselects it. */
+  private toggleStation(index: number): void {
+    if (index === this.selectedIdx) {
+      this.select(-1);
+      radioStop();
+    } else {
+      this.select(index);
+      radioPlay(index);
+    }
+  }
+
+  /** Pick + start a station (used by Next/Prev). */
   private playStation(index: number): void {
     this.select(index);
     radioPlay(index);
-  }
-
-  /** Stop button: leave radio mode entirely. */
-  private stopRadio(): void {
-    this.select(-1);
-    radioStop();
   }
 
   private onVolume(value: number): void {
@@ -144,12 +149,9 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
             {Stations.map((name, i) => (
               <div class={this.selectedSub.map((p) => (p === i ? "station selected" : "station"))}>
                 <span class="marker">{this.selectedSub.map((p) => (p === i ? ">" : ""))}</span>
-                <TTButton key={name} type="secondary" callback={(): void => this.playStation(i)} />
+                <TTButton key={name} type="secondary" callback={(): void => this.toggleStation(i)} />
               </div>
             ))}
-          </div>
-          <div class="radio-actions">
-            <TTButton key="Stop" type="secondary" callback={(): void => this.stopRadio()} />
           </div>
         </section>
       </div>
