@@ -1,0 +1,19 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# EFB build output
+**/dist/
+_PackageInt/
+Packages/
+PackagesMetadata/
+
+# .NET companion app build output
+bin/
+obj/
+*.user
+
+# editor
+.vscode/
+.idea/
