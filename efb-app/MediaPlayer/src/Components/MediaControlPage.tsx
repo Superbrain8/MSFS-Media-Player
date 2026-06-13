@@ -1,4 +1,4 @@
-import { GamepadUiView, RequiredProps, TTButton, TVNode, UiViewProps } from "@efb/efb-api";
+import { GamepadUiView, Marquee, RequiredProps, Slider, TTButton, TVNode, UiViewProps } from "@efb/efb-api";
 import { FSComponent, Subject, VNode } from "@microsoft/msfs-sdk";
 import {
   localNext,
@@ -14,25 +14,27 @@ import "./MediaControlPage.scss";
 
 type MediaControlPageProps = RequiredProps<UiViewProps, "appViewService">;
 
-const VOLUME_STEP = 10;
+const INITIAL_VOLUME = 60;
 
 /**
- * The whole control surface: local-media transport, radio station list + stop, volume, and live
- * status read from the companion's LVARs. Thin — all real work happens in the companion.
+ * The whole control surface: local-media transport, a vertical radio station list (the playing
+ * station is highlighted), a volume slider, and live status polled from the companion's LVARs.
+ * Thin — all real work happens in the companion.
  */
 export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControlPageProps> {
   public readonly tabName = MediaControlPage.name;
 
-  private readonly statusText = Subject.create("Connecting…");
-  private readonly gateText = Subject.create("");
-  private readonly volumeText = Subject.create("60%");
+  private readonly nowPlaying = Subject.create("Connecting…");
+  private readonly gateOpen = Subject.create(true);
+  /** Index of the currently playing station, -1 if none. Drives the row highlight. */
+  private readonly playingIdx = Subject.create(-1);
+  private readonly volume = Subject.create(INITIAL_VOLUME);
 
-  private volume = 60;
   private pollHandle = 0;
 
   public onAfterRender(node: VNode): void {
     super.onAfterRender(node);
-    setRadioVolume(this.volume);
+    setRadioVolume(this.volume.get());
     this.pollHandle = window.setInterval(() => this.poll(), 300);
   }
 
@@ -43,58 +45,61 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
   private poll(): void {
     const s = readStatus();
+    this.gateOpen.set(s.gateOpen);
+    this.playingIdx.set(s.radioPlaying ? s.radioIdx : -1);
     if (s.radioPlaying) {
-      const name = Stations[s.radioIdx] ?? "playing";
-      this.statusText.set(`Radio — ${name}`);
+      this.nowPlaying.set(`Radio — ${Stations[s.radioIdx] ?? "playing"}`);
     } else if (s.localPlaying) {
-      this.statusText.set("Local media playing");
+      this.nowPlaying.set("Local media playing");
     } else {
-      this.statusText.set("Idle");
+      this.nowPlaying.set("Idle");
     }
-    this.gateText.set(s.gateOpen ? "Avionics ON" : "Avionics OFF — radio muted");
   }
 
-  private changeVolume(delta: number): void {
-    this.volume = Math.max(0, Math.min(100, this.volume + delta));
-    this.volumeText.set(`${this.volume}%`);
-    setRadioVolume(this.volume);
+  private onVolume(value: number): void {
+    this.volume.set(value);
+    setRadioVolume(value);
   }
 
   public render(): TVNode<HTMLDivElement> {
     return (
       <div ref={this.gamepadUiViewRef} class="media-control-page">
         <div class="status-bar">
-          <span class="now-playing">{this.statusText}</span>
-          <span class="gate">{this.gateText}</span>
+          <Marquee class="now-playing">{this.nowPlaying}</Marquee>
+          <span class={this.gateOpen.map((o) => (o ? "gate ok" : "gate muted"))}>
+            {this.gateOpen.map((o) => (o ? "Avionics ON" : "Avionics OFF — muted"))}
+          </span>
         </div>
 
         <section class="block">
           <h3>Local media</h3>
-          <div class="row">
+          <div class="transport">
             <TTButton key="◄◄" type="secondary" callback={localPrev} />
             <TTButton key="▶ / ⏸" callback={localPlayPause} />
             <TTButton key="►►" type="secondary" callback={localNext} />
           </div>
         </section>
 
-        <section class="block">
+        <section class="block radio">
           <h3>Radio</h3>
-          <div class="stations">
+          <div class="station-list">
             {Stations.map((name, i) => (
-              <TTButton key={name} type="secondary" callback={(): void => radioPlay(i)} />
+              <div class={this.playingIdx.map((p) => (p === i ? "station selected" : "station"))}>
+                <span class="marker">{this.playingIdx.map((p) => (p === i ? "▶" : ""))}</span>
+                <TTButton key={name} type="secondary" callback={(): void => radioPlay(i)} />
+              </div>
             ))}
           </div>
-          <div class="row">
-            <TTButton key="Stop radio" type="secondary" callback={radioStop} />
+          <div class="radio-actions">
+            <TTButton key="Stop" type="secondary" callback={radioStop} />
           </div>
         </section>
 
         <section class="block">
-          <h3>Radio volume</h3>
-          <div class="row">
-            <TTButton key="–" type="secondary" callback={(): void => this.changeVolume(-VOLUME_STEP)} />
-            <span class="volume">{this.volumeText}</span>
-            <TTButton key="+" type="secondary" callback={(): void => this.changeVolume(VOLUME_STEP)} />
+          <h3>Volume</h3>
+          <div class="volume-row">
+            <Slider value={this.volume} min={0} max={100} step={5} onValueChange={(v): void => this.onVolume(v)} />
+            <span class="volume-pct">{this.volume.map((v) => `${Math.round(v)}%`)}</span>
           </div>
         </section>
       </div>
