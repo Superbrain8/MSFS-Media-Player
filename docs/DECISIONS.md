@@ -54,6 +54,21 @@
   - ADF VOLUME:1 knob not wired in many aircraft → not used. **Volume control lives in the EFB
     panel / tray**, not the ADF knob. No real PCM injection into the sim mixer (not possible).
 
+## 2026-06-13 — EFB bridge + UI scaffolded (P4/P5)
+
+- **EFB app** scaffolded in `efb-app/` from the **MSFS 2024 SDK EFB template**
+  (`Samples/DevmodeProjects/EFB`) — `@efb/efb-api` App framework + `@microsoft/msfs-sdk` FSComponent
+  JSX, esbuild → `dist/`. Mixed-mode-free; builds clean (Node 24, typecheck passes). The SDK's
+  prebuilt `efb_api/dist` is vendored + git-tracked (npm installs the app from it).
+  - Dep drift fix: pinned `esbuild-sass-plugin` to `3.3.1` (newer needs esbuild ≥0.27; template is 0.21).
+- **Bridge (LVARs, numeric):** EFB writes `L:MEDIAPLAYER_CMD` (command pulse, companion consumes →0)
+  + `L:MEDIAPLAYER_RADIO_VOL`. Companion writes status `L:MEDIAPLAYER_{RADIO_PLAYING,RADIO_IDX,GATE,
+  LOCAL_PLAYING}`. Command codes: 1=play/pause, 2=next, 3=prev, 10=radio stop, 100+n=play station n.
+  LVARs read/written via SimConnect data definitions (`L:` name, unit "number"). Contract is shared:
+  `efb-app/.../bridge/MediaBridge.ts` ↔ `companion-app/SimConnectBridge.cs`.
+- **Deferred:** now-playing TEXT (track/station names) to the EFB needs a client-data area; for now
+  the EFB shows its own static station list + numeric state. Station-list sync companion→EFB later.
+
 ## Build phases (derived from the above)
 
 - **P0** Companion skeleton: `net8.0-windows` tray app, single-instance, logging.

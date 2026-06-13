@@ -5,6 +5,9 @@ Thumbs.db
 
 # EFB build output
 **/dist/
+# ...but the EFB SDK's prebuilt efb_api/dist is a vendored dependency npm installs from — track it.
+!efb-app/efb_api/dist/
+!efb-app/efb_api/dist/**
 _PackageInt/
 Packages/
 PackagesMetadata/

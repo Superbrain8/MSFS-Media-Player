@@ -27,8 +27,26 @@ internal sealed class SimConnectBridge : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     private struct DoubleData { public double Value; }
 
-    private enum Define { }   // ids cast from probe index
+    private enum Define { }   // ids cast from int (probe index / the DEF_* constants below)
     private enum Request { }
+
+    // --- EFB↔companion LVAR bridge (P4). Names mirror efb-app/.../bridge/MediaBridge.ts. ---
+    // Define/request ids kept clear of the probe index range (0..AdfProbes.Length-1).
+    private const int DEF_CMD = 10;                    // read: command pulse from EFB
+    private const int DEF_VOL = 11;                    // read: radio volume 0..100 from EFB
+    private const int DEF_STATUS_RADIO_PLAYING = 20;   // write: status to EFB
+    private const int DEF_STATUS_RADIO_IDX = 21;
+    private const int DEF_STATUS_LOCAL_PLAYING = 22;
+    private const int DEF_STATUS_GATE = 23;
+
+    private const string LVAR_CMD = "L:MEDIAPLAYER_CMD";
+    private const string LVAR_VOL = "L:MEDIAPLAYER_RADIO_VOL";
+    private const string LVAR_RADIO_PLAYING = "L:MEDIAPLAYER_RADIO_PLAYING";
+    private const string LVAR_RADIO_IDX = "L:MEDIAPLAYER_RADIO_IDX";
+    private const string LVAR_LOCAL_PLAYING = "L:MEDIAPLAYER_LOCAL_PLAYING";
+    private const string LVAR_GATE = "L:MEDIAPLAYER_GATE";
+
+    private bool _lvarsReady;
 
     private readonly MessageWindow _window;
     private readonly System.Windows.Forms.Timer _reconnectTimer;
@@ -49,6 +67,12 @@ internal sealed class SimConnectBridge : IDisposable
     /// UI thread as ADF state changes. On disconnect, resets to 1 (plain radio out of sim).
     /// </summary>
     public event Action<float>? AdfGateChanged;
+
+    /// <summary>Raised (UI thread) when the EFB writes a command code (see Cmd.* in MediaBridge.ts).</summary>
+    public event Action<int>? CommandReceived;
+
+    /// <summary>Raised (UI thread) when the EFB writes a radio volume 0..100.</summary>
+    public event Action<int>? VolumeReceived;
 
     public SimConnectBridge()
     {
@@ -96,6 +120,68 @@ internal sealed class SimConnectBridge : IDisposable
         Log.Info($"SimConnect: connected to {data.szApplicationName} v{data.dwApplicationVersionMajor}.{data.dwApplicationVersionMinor}");
         ConnectionChanged?.Invoke(true);
         SetupAdfProbes();
+        SetupLvars();
+    }
+
+    /// <summary>P4: register the EFB command/volume reads and the status writes.</summary>
+    private void SetupLvars()
+    {
+        if (_sc is null) return;
+        try
+        {
+            // Reads — request on change.
+            DefineLvar(DEF_CMD, LVAR_CMD);
+            _sc.RequestDataOnSimObject((Request)DEF_CMD, (Define)DEF_CMD, SimConnect.SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.SECOND, SIMCONNECT_DATA_REQUEST_FLAG.CHANGED, 0, 0, 0);
+            DefineLvar(DEF_VOL, LVAR_VOL);
+            _sc.RequestDataOnSimObject((Request)DEF_VOL, (Define)DEF_VOL, SimConnect.SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.SECOND, SIMCONNECT_DATA_REQUEST_FLAG.CHANGED, 0, 0, 0);
+
+            // Writes — define only (pushed via SetDataOnSimObject).
+            DefineLvar(DEF_STATUS_RADIO_PLAYING, LVAR_RADIO_PLAYING);
+            DefineLvar(DEF_STATUS_RADIO_IDX, LVAR_RADIO_IDX);
+            DefineLvar(DEF_STATUS_LOCAL_PLAYING, LVAR_LOCAL_PLAYING);
+            DefineLvar(DEF_STATUS_GATE, LVAR_GATE);
+
+            _lvarsReady = true;
+            WriteLvar(DEF_STATUS_GATE, _gate >= 0.5f ? 1 : 0); // push initial gate
+            Log.Info("SimConnect: LVAR bridge ready");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"LVAR bridge setup failed: {ex.Message}");
+        }
+    }
+
+    private void DefineLvar(int id, string name)
+    {
+        _sc!.AddToDataDefinition((Define)id, name, "number", SIMCONNECT_DATATYPE.FLOAT64,
+            0f, SimConnect.SIMCONNECT_UNUSED);
+        _sc.RegisterDataDefineStruct<DoubleData>((Define)id);
+    }
+
+    /// <summary>EFB → companion radio status.</summary>
+    public void SetRadioStatus(bool playing, int stationIndex)
+    {
+        WriteLvar(DEF_STATUS_RADIO_PLAYING, playing ? 1 : 0);
+        WriteLvar(DEF_STATUS_RADIO_IDX, stationIndex);
+    }
+
+    /// <summary>EFB → companion local-media status.</summary>
+    public void SetLocalStatus(bool playing) => WriteLvar(DEF_STATUS_LOCAL_PLAYING, playing ? 1 : 0);
+
+    private void WriteLvar(int defId, double value)
+    {
+        if (!_lvarsReady || _sc is null) return;
+        try
+        {
+            _sc.SetDataOnSimObject((Define)defId, SimConnect.SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_DATA_SET_FLAG.DEFAULT, new DoubleData { Value = value });
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"WriteLvar def {defId} failed: {ex.Message}");
+        }
     }
 
     /// <summary>P3b: register each ADF probe var and request it once per second when it changes.</summary>
@@ -123,16 +209,37 @@ internal sealed class SimConnectBridge : IDisposable
 
     private void OnSimObjectData(SimConnect sender, SIMCONNECT_RECV_SIMOBJECT_DATA data)
     {
-        int i = (int)data.dwRequestID;
-        if (i < 0 || i >= AdfProbes.Length) return;
-        var value = ((DoubleData)data.dwData[0]).Value;
-        var name = AdfProbes[i].Name;
-        Log.Info($"ADF: {name} = {value}");
+        int id = (int)data.dwRequestID;
+        double value = ((DoubleData)data.dwData[0]).Value;
 
-        if (name == "CIRCUIT AVIONICS ON")
+        // EFB → companion bridge reads.
+        if (id == DEF_CMD)
         {
-            _avionicsPower = value != 0;
-            RecomputeGate();
+            int code = (int)value;
+            if (code != 0)
+            {
+                Log.Info($"LVAR command: {code}");
+                CommandReceived?.Invoke(code);
+                WriteLvar(DEF_CMD, 0); // consume so the same command isn't re-fired
+            }
+            return;
+        }
+        if (id == DEF_VOL)
+        {
+            VolumeReceived?.Invoke((int)Math.Clamp(value, 0, 100));
+            return;
+        }
+
+        // ADF/power probes.
+        if (id >= 0 && id < AdfProbes.Length)
+        {
+            var name = AdfProbes[id].Name;
+            Log.Info($"ADF: {name} = {value}");
+            if (name == "CIRCUIT AVIONICS ON")
+            {
+                _avionicsPower = value != 0;
+                RecomputeGate();
+            }
         }
     }
 
@@ -145,6 +252,7 @@ internal sealed class SimConnectBridge : IDisposable
         _gate = gate;
         Log.Info($"ADF gate → {gate:0.00} (avionics powered={_avionicsPower})");
         AdfGateChanged?.Invoke(gate);
+        WriteLvar(DEF_STATUS_GATE, gate >= 0.5f ? 1 : 0);
     }
 
     private void OnQuit(SimConnect sender, SIMCONNECT_RECV data)
@@ -171,6 +279,7 @@ internal sealed class SimConnectBridge : IDisposable
     {
         bool wasConnected = Connected || _sc is not null;
         Connected = false;
+        _lvarsReady = false;
         try { _sc?.Dispose(); } catch { /* best effort */ }
         _sc = null;
         if (wasConnected)

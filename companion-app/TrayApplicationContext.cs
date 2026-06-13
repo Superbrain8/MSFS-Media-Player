@@ -26,6 +26,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly SimConnectBridge _sim = new();
     private readonly ToolStripMenuItem _simStatusItem;
 
+    private readonly IReadOnlyList<RadioStation> _stations = StationStore.Load();
+
     private SynchronizationContext? _ui;
 
     public TrayApplicationContext()
@@ -41,10 +43,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _stopRadioItem = new ToolStripMenuItem("Stop radio", null, (_, _) => _radio.Stop()) { Enabled = false };
 
         var stationsMenu = new ToolStripMenuItem("Play station");
-        foreach (var station in StationStore.Load())
+        for (int i = 0; i < _stations.Count; i++)
         {
-            var s = station; // capture per-iteration
-            stationsMenu.DropDownItems.Add(new ToolStripMenuItem(s.Name, null, (_, _) => _ = _radio.PlayAsync(s)));
+            int idx = i; // capture per-iteration
+            stationsMenu.DropDownItems.Add(new ToolStripMenuItem(_stations[idx].Name, null, (_, _) => PlayStation(idx)));
         }
 
         var volumeMenu = new ToolStripMenuItem("Radio volume");
@@ -96,6 +98,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _radio.StatusChanged += OnRadioChanged;
             _sim.ConnectionChanged += OnSimChanged;
             _sim.AdfGateChanged += g => _ui?.Post(_ => _radio.AdfGate = g, null);
+            _sim.CommandReceived += code => _ui?.Post(_ => DispatchCommand(code), null);
+            _sim.VolumeReceived += v => _ui?.Post(_ => _radio.Volume = v / 100f, null);
             _sim.Start();
             try { await _media.InitAsync(); }
             catch (Exception ex) { Log.Error($"MediaController init failed: {ex.Message}"); }
@@ -108,6 +112,26 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void OnSimChanged(bool connected)
         => _ui?.Post(_ => _simStatusItem.Text = connected ? "Sim: connected" : "Sim: disconnected", null);
 
+    // Command codes mirror Cmd.* in efb-app/.../bridge/MediaBridge.ts.
+    private void DispatchCommand(int code)
+    {
+        switch (code)
+        {
+            case 1: _ = _media.TogglePlayPauseAsync(); break;
+            case 2: _ = _media.NextAsync(); break;
+            case 3: _ = _media.PreviousAsync(); break;
+            case 10: _radio.Stop(); break;
+            case >= 100: PlayStation(code - 100); break;
+            default: Log.Warn($"Unknown EFB command code: {code}"); break;
+        }
+    }
+
+    private void PlayStation(int index)
+    {
+        if (index < 0 || index >= _stations.Count) { Log.Warn($"Station index out of range: {index}"); return; }
+        _ = _radio.PlayAsync(_stations[index]);
+    }
+
     private void RenderMedia(NowPlaying np)
     {
         // Transport always works: SMTC when a session exists, global media keys otherwise.
@@ -119,12 +143,24 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ? $"{(np.IsPlaying ? "▶" : "⏸")} {np.Display}"
             : "MSFS Media Player — media-key control";
         _trayIcon.Text = tip.Length > MaxTooltip ? tip[..MaxTooltip] : tip;
+
+        _sim.SetLocalStatus(np.HasSession && np.IsPlaying);
     }
 
     private void RenderRadio(RadioStatus rs)
     {
         _radioStatusItem.Text = rs.IsPlaying ? $"Radio: {rs.StationName}" : "Radio: stopped";
         _stopRadioItem.Enabled = rs.IsPlaying;
+
+        int idx = rs.IsPlaying ? IndexOfStation(rs.StationName) : -1;
+        _sim.SetRadioStatus(rs.IsPlaying, idx);
+    }
+
+    private int IndexOfStation(string name)
+    {
+        for (int i = 0; i < _stations.Count; i++)
+            if (_stations[i].Name == name) return i;
+        return -1;
     }
 
     protected override void Dispose(bool disposing)

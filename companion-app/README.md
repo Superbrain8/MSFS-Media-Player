@@ -7,10 +7,11 @@ See [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) and [../docs/DECISIONS.md
 
 ## Status
 
-**P3 — SimConnect + ADF gating.** Connects to MSFS (auto-reconnect, quit-aware), reads ADF state,
-and gates radio volume by `(avionics && battery) ? ADF VOLUME:1/100 : 0` while connected — internet
-radio rides the cockpit ADF audio knob + power. P1 (SMTC + media-key fallback) and P2 (radio) present.
-Next: P4 (EFB↔companion bridge over SimConnect LVARs/client data).
+**P4 — EFB bridge.** Reads EFB commands (`L:MEDIAPLAYER_CMD`) + volume (`L:MEDIAPLAYER_RADIO_VOL`)
+over SimConnect and dispatches to media/radio; writes status LVARs (`_RADIO_PLAYING`, `_RADIO_IDX`,
+`_GATE`, `_LOCAL_PLAYING`) back for the EFB to poll. Gate on `CIRCUIT AVIONICS ON` (P3). Plus P1
+(SMTC + media-key fallback) and P2 (radio). The EFB control surface lives in `../efb-app`.
+Remaining: now-playing TEXT to the EFB (needs a SimConnect client-data area).
 
 Stations config: `%LocalAppData%\MsfsMediaPlayer\stations.json` — edit + restart to change the list.
 
