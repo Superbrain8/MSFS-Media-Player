@@ -26,9 +26,14 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
   private readonly nowPlaying = Subject.create("Connecting…");
   private readonly gateOpen = Subject.create(true);
-  /** Index of the currently playing station, -1 if none. Drives the row highlight. */
-  private readonly playingIdx = Subject.create(-1);
+  /** The user-selected station index (persists through pause), -1 if none. Drives the highlight. */
+  private readonly selectedSub = Subject.create(-1);
   private readonly volume = Subject.create(INITIAL_VOLUME);
+
+  // "Radio mode" = a station is selected (selectedIdx >= 0); it stays selected while paused, and is
+  // only cleared by Stop. Transport drives the radio in this mode, otherwise local media.
+  private selectedIdx = -1;
+  private radioPlaying = false;
 
   private pollHandle = 0;
 
@@ -45,10 +50,15 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
   private poll(): void {
     const s = readStatus();
+    this.radioPlaying = s.radioPlaying;
     this.gateOpen.set(s.gateOpen);
-    this.playingIdx.set(s.radioPlaying ? s.radioIdx : -1);
-    if (s.radioPlaying) {
-      this.nowPlaying.set(`Radio — ${Stations[s.radioIdx] ?? "playing"}`);
+
+    // Adopt the companion's station if it's already playing when the app opens.
+    if (s.radioPlaying && this.selectedIdx < 0) this.select(s.radioIdx);
+
+    if (this.selectedIdx >= 0) {
+      const name = Stations[this.selectedIdx] ?? "station";
+      this.nowPlaying.set(s.radioPlaying ? `Radio: ${name}` : `Radio (paused): ${name}`);
     } else if (s.localPlaying) {
       this.nowPlaying.set("Local media playing");
     } else {
@@ -56,9 +66,47 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
     }
   }
 
+  private select(index: number): void {
+    this.selectedIdx = index;
+    this.selectedSub.set(index);
+  }
+
+  /** Pick + start a station (also used by Next/Prev). */
+  private playStation(index: number): void {
+    this.select(index);
+    radioPlay(index);
+  }
+
+  /** Stop button: leave radio mode entirely. */
+  private stopRadio(): void {
+    this.select(-1);
+    radioStop();
+  }
+
   private onVolume(value: number): void {
     this.volume.set(value);
     setRadioVolume(value);
+  }
+
+  // Transport drives the radio while a station is selected (Play/Pause toggles the stream but keeps
+  // the selection); otherwise it drives local media.
+  private onPlayPause(): void {
+    if (this.selectedIdx >= 0) {
+      if (this.radioPlaying) radioStop(); // pause — selection kept
+      else radioPlay(this.selectedIdx); // resume
+    } else {
+      localPlayPause();
+    }
+  }
+
+  private onNext(): void {
+    if (this.selectedIdx >= 0) this.playStation((this.selectedIdx + 1) % Stations.length);
+    else localNext();
+  }
+
+  private onPrev(): void {
+    if (this.selectedIdx >= 0) this.playStation((this.selectedIdx - 1 + Stations.length) % Stations.length);
+    else localPrev();
   }
 
   public render(): TVNode<HTMLDivElement> {
@@ -69,31 +117,16 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
         <div class="np-bar">
           <span class="now-playing">{this.nowPlaying}</span>
           <span class={this.gateOpen.map((o) => (o ? "gate ok" : "gate muted"))}>
-            {this.gateOpen.map((o) => (o ? "Avionics ON" : "Avionics OFF — muted"))}
+            {this.gateOpen.map((o) => (o ? "Avionics ON" : "Avionics OFF (muted)"))}
           </span>
         </div>
 
         <section class="block">
-          <h3>Local media</h3>
+          <h3>Media</h3>
           <div class="transport">
-            <TTButton key="◄◄" type="secondary" callback={localPrev} />
-            <TTButton key="▶ / ⏸" callback={localPlayPause} />
-            <TTButton key="►►" type="secondary" callback={localNext} />
-          </div>
-        </section>
-
-        <section class="block radio">
-          <h3>Radio</h3>
-          <div class="station-list">
-            {Stations.map((name, i) => (
-              <div class={this.playingIdx.map((p) => (p === i ? "station selected" : "station"))}>
-                <span class="marker">{this.playingIdx.map((p) => (p === i ? "▶" : ""))}</span>
-                <TTButton key={name} type="secondary" callback={(): void => radioPlay(i)} />
-              </div>
-            ))}
-          </div>
-          <div class="radio-actions">
-            <TTButton key="Stop" type="secondary" callback={radioStop} />
+            <TTButton key="Prev" type="secondary" callback={(): void => this.onPrev()} />
+            <TTButton key="Play / Pause" callback={(): void => this.onPlayPause()} />
+            <TTButton key="Next" type="secondary" callback={(): void => this.onNext()} />
           </div>
         </section>
 
@@ -102,6 +135,21 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
           <div class="volume-row">
             <Slider value={this.volume} min={0} max={100} step={5} onValueChange={(v): void => this.onVolume(v)} />
             <span class="volume-pct">{this.volume.map((v) => `${Math.round(v)}%`)}</span>
+          </div>
+        </section>
+
+        <section class="block radio">
+          <h3>Radio</h3>
+          <div class="station-list">
+            {Stations.map((name, i) => (
+              <div class={this.selectedSub.map((p) => (p === i ? "station selected" : "station"))}>
+                <span class="marker">{this.selectedSub.map((p) => (p === i ? ">" : ""))}</span>
+                <TTButton key={name} type="secondary" callback={(): void => this.playStation(i)} />
+              </div>
+            ))}
+          </div>
+          <div class="radio-actions">
+            <TTButton key="Stop" type="secondary" callback={(): void => this.stopRadio()} />
           </div>
         </section>
       </div>

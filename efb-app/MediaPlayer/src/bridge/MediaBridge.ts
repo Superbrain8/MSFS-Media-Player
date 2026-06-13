@@ -45,11 +45,11 @@ export const Cmd = {
 
 /** Station list shown in the EFB. Mirrors the companion defaults until list-sync (client data) lands. */
 export const Stations: readonly string[] = [
-  "SomaFM — Groove Salad",
-  "SomaFM — Drone Zone",
-  "Radio Paradise — Main Mix",
-  "Radio Paradise — Mellow Mix",
-  "Radio Bob — Harte Saite",
+  "SomaFM - Groove Salad",
+  "SomaFM - Drone Zone",
+  "Radio Paradise - Main Mix",
+  "Radio Paradise - Mellow Mix",
+  "Radio Bob - Harte Saite",
 ];
 
 export function sendCommand(code: number): void {
