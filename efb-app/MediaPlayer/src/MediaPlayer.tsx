@@ -44,7 +44,9 @@ class MediaPlayer extends App {
   public SuspendMode = AppSuspendMode.SLEEP;
 
   public async install(_props: AppInstallProps): Promise<void> {
-    Efb.loadCss(`${BASE_URL}/MediaPlayer.css`);
+    // Cache-bust: Coherent caches coui:// stylesheets, so a plain reload keeps serving the old CSS
+    // even after the JS updates. A per-launch query forces a fresh fetch.
+    Efb.loadCss(`${BASE_URL}/MediaPlayer.css?v=${Date.now()}`);
     return Promise.resolve();
   }
 

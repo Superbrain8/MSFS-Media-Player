@@ -1,13 +1,21 @@
 .media-control-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 28px 32px;
+  gap: 18px;
+  padding: 0 6% 88px;
   height: 100%;
   box-sizing: border-box;
   color: #f5f6fa;
 
-  .status-bar {
+  // Explicit-height spacer pushes content below the EFB shell's top bar (date/notifications).
+  .top-safe {
+    flex: none;
+    height: 96px;
+  }
+
+  // NOTE: do not name this ".status-bar" — that's a reserved EFB global class (the shell's top
+  // date/notification bar) and the EFB positions it absolutely, yanking it to the top.
+  .np-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -21,6 +29,9 @@
       min-width: 0;
       font-size: 26px;
       font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .gate {
@@ -59,15 +70,13 @@
   }
 
   .radio {
-    flex: 1;
-    min-height: 0;
     display: flex;
     flex-direction: column;
   }
 
   .station-list {
-    flex: 1;
-    min-height: 0;
+    // Compact: stack near the top, scroll only when there are many stations.
+    max-height: 360px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;

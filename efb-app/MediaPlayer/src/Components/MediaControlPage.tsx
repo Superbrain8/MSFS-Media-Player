@@ -1,4 +1,4 @@
-import { GamepadUiView, Marquee, RequiredProps, Slider, TTButton, TVNode, UiViewProps } from "@efb/efb-api";
+import { GamepadUiView, RequiredProps, Slider, TTButton, TVNode, UiViewProps } from "@efb/efb-api";
 import { FSComponent, Subject, VNode } from "@microsoft/msfs-sdk";
 import {
   localNext,
@@ -64,8 +64,10 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
   public render(): TVNode<HTMLDivElement> {
     return (
       <div ref={this.gamepadUiViewRef} class="media-control-page">
-        <div class="status-bar">
-          <Marquee class="now-playing">{this.nowPlaying}</Marquee>
+        {/* Clears the EFB shell's top bar. Inline style bypasses the cached coui:// stylesheet. */}
+        <div class="top-safe" style="flex: 0 0 auto; height: 96px; width: 100%;" />
+        <div class="np-bar">
+          <span class="now-playing">{this.nowPlaying}</span>
           <span class={this.gateOpen.map((o) => (o ? "gate ok" : "gate muted"))}>
             {this.gateOpen.map((o) => (o ? "Avionics ON" : "Avionics OFF — muted"))}
           </span>
