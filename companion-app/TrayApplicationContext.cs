@@ -71,6 +71,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_simStatusItem);
         menu.Items.Add(new ToolStripSeparator());
+        var autoStartItem = new ToolStripMenuItem("Start with Windows")
+        {
+            CheckOnClick = true,
+            Checked = AutoStart.IsEnabled(),
+        };
+        autoStartItem.CheckedChanged += (_, _) => AutoStart.SetEnabled(autoStartItem.Checked);
+        menu.Items.Add(autoStartItem);
         menu.Items.Add("Open log folder", null, (_, _) => Log.OpenFolder());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
