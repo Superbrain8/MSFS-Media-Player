@@ -53,4 +53,18 @@ internal static class StationStore
             return Defaults;
         }
     }
+
+    public static void Save(IReadOnlyList<RadioStation> stations)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(stations, JsonOpts));
+            Log.Info($"Saved {stations.Count} stations to {ConfigPath}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Saving stations failed: {ex.Message}");
+        }
+    }
 }

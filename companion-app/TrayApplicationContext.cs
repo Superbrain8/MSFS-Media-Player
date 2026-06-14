@@ -26,7 +26,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly SimConnectBridge _sim = new();
     private readonly ToolStripMenuItem _simStatusItem;
 
-    private readonly IReadOnlyList<RadioStation> _stations = StationStore.Load();
+    private List<RadioStation> _stations = StationStore.Load().ToList();
+    private readonly ToolStripMenuItem _stationsMenu = new("Play station");
 
     private SynchronizationContext? _ui;
 
@@ -42,12 +43,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _radioStatusItem = new ToolStripMenuItem("Radio: stopped") { Enabled = false };
         _stopRadioItem = new ToolStripMenuItem("Stop radio", null, (_, _) => _radio.Stop()) { Enabled = false };
 
-        var stationsMenu = new ToolStripMenuItem("Play station");
-        for (int i = 0; i < _stations.Count; i++)
-        {
-            int idx = i; // capture per-iteration
-            stationsMenu.DropDownItems.Add(new ToolStripMenuItem(_stations[idx].Name, null, (_, _) => PlayStation(idx)));
-        }
+        RebuildStationsMenu();
 
         var volumeMenu = new ToolStripMenuItem("Radio volume");
         foreach (var pct in new[] { 25, 50, 75, 100 })
@@ -67,9 +63,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(_nextItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_radioStatusItem);
-        menu.Items.Add(stationsMenu);
+        menu.Items.Add(_stationsMenu);
         menu.Items.Add(volumeMenu);
         menu.Items.Add(_stopRadioItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Edit stations…", null, (_, _) => EditStations());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_simStatusItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -131,6 +129,29 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (index < 0 || index >= _stations.Count) { Log.Warn($"Station index out of range: {index}"); return; }
         _ = _radio.PlayAsync(_stations[index]);
+    }
+
+    private void RebuildStationsMenu()
+    {
+        _stationsMenu.DropDownItems.Clear();
+        for (int i = 0; i < _stations.Count; i++)
+        {
+            int idx = i; // capture per-iteration
+            _stationsMenu.DropDownItems.Add(new ToolStripMenuItem(_stations[idx].Name, null, (_, _) => PlayStation(idx)));
+        }
+        _stationsMenu.Enabled = _stations.Count > 0;
+    }
+
+    private void EditStations()
+    {
+        using var form = new StationsForm(_stations);
+        if (form.ShowDialog() != DialogResult.OK) return;
+
+        _stations = form.Stations;
+        StationStore.Save(_stations);
+        RebuildStationsMenu();
+        _sim.SetStationList(_stations.Select(s => s.Name)); // live-push to the EFB
+        Log.Info($"Station list updated ({_stations.Count})");
     }
 
     private void RenderMedia(NowPlaying np)
