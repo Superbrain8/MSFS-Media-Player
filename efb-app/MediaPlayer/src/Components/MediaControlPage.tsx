@@ -161,7 +161,8 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
   private stationRowClass(i: number): MappedSubject<[string, number], string> {
     return MappedSubject.create(
-      ([name, sel]): string => (name === "" ? "station hidden" : sel === i ? "station selected" : "station"),
+      ([name, sel]): string =>
+        name === "" ? "mp-row mp-row--hidden" : sel === i ? "mp-row mp-row--selected" : "mp-row",
       this.nameSubs[i],
       this.selectedSub,
     );
@@ -202,12 +203,24 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
         <section class="block radio">
           <h3>Radio</h3>
-          <div class="station-list">
+          <div class="mp-stations">
             {this.nameSubs.map((nameSub, i) => (
-              <div class={this.stationRowClass(i)}>
-                <span class="marker">{this.selectedSub.map((p) => (p === i ? ">" : ""))}</span>
+              // Inline layout styles back up the (private, mp-prefixed) CSS so neither EFB global
+              // classes nor the cached coui:// stylesheet can collapse the rows / overlap the list.
+              // Hiding empty slots is inline too — an inline `display:flex` would otherwise beat the
+              // `.mp-row--hidden { display:none }` class and leave blank rows showing.
+              <div
+                class={this.stationRowClass(i)}
+                style={nameSub.map((n) =>
+                  n.length > 0
+                    ? "display: flex; align-items: stretch; width: 100%; min-height: 44px; position: relative;"
+                    : "display: none;",
+                )}
+              >
+                <span class="mp-marker">{this.selectedSub.map((p) => (p === i ? ">" : ""))}</span>
                 <Button
-                  class="station-btn"
+                  class="mp-row-btn"
+                  style="position: relative; height: auto; min-height: 0; margin: 0; display: flex; align-items: center; line-height: 1.2; min-width: 0; box-sizing: border-box; flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;"
                   visible={nameSub.map((n) => n.length > 0)}
                   callback={(): void => this.toggleStation(i)}
                 >
