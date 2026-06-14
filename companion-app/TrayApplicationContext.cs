@@ -76,7 +76,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _trayIcon = new NotifyIcon
         {
-            Icon = AppIcon.CreateTrayIcon(),
+            Icon = AppIcon.CreateTrayIcon(AppIcon.Disconnected),
             Text = "MSFS Media Player",
             ContextMenuStrip = menu,
             Visible = true,
@@ -108,8 +108,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void OnMediaChanged(NowPlaying np) => _ui?.Post(_ => RenderMedia(np), null);
     private void OnRadioChanged(RadioStatus rs) => _ui?.Post(_ => RenderRadio(rs), null);
-    private void OnSimChanged(bool connected)
-        => _ui?.Post(_ => _simStatusItem.Text = connected ? "Sim: connected" : "Sim: disconnected", null);
+    private void OnSimChanged(bool connected) => _ui?.Post(_ =>
+    {
+        _simStatusItem.Text = connected ? "Sim: connected" : "Sim: disconnected";
+        var old = _trayIcon.Icon;
+        _trayIcon.Icon = AppIcon.CreateTrayIcon(connected ? AppIcon.Connected : AppIcon.Disconnected);
+        old?.Dispose();
+    }, null);
 
     // Command codes mirror Cmd.* in efb-app/.../bridge/MediaBridge.ts.
     private void DispatchCommand(int code)
