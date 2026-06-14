@@ -38,6 +38,25 @@ Strings (now-playing, station names) are packed into numeric LVARs, since the EF
 SimConnect client data. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/DECISIONS.md](docs/DECISIONS.md).
 
+## Installing (from a release)
+
+Grab the latest `MsfsMediaPlayer-v*.zip` from the [Releases](https://github.com/Superbrain8/MSFS-Media-Player/releases) page and unzip it. The release bundles the SimConnect client DLLs, so no SDK install is needed to run it.
+
+1. **Companion app** — copy the `Companion` folder anywhere and run `MsfsMediaPlayer.Companion.exe`.
+   - The framework-dependent build needs the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0); the self-contained build does not.
+   - It lives in the system tray. Right-click for transport controls, **Edit stations…**, and an optional **Start with Windows** toggle.
+   - The tray icon is **red** when disconnected from the sim, **green** when connected.
+2. **EFB app** — copy `Community\msfs-mediaplayer` into your MSFS 2024 **Community** folder.
+3. Launch MSFS 2024, open the **Media Player** app on the EFB tablet.
+
+### Using it
+
+- **Local media** (Spotify / YouTube / Qobuz / any app with Windows media controls): use the transport buttons on the EFB. Now-playing title scrolls across the top.
+- **Internet radio**: tap a station to play it (tap again to stop). The transport buttons control the radio while a station is selected, otherwise local media. Radio volume is gated by avionics power — it mutes when the avionics bus is off.
+- **Edit stations**: companion tray → **Edit stations…** (name + URL grid). Saves sync live to the EFB.
+
+> Defender SmartScreen may warn on the unsigned exe — **More info → Run anyway**.
+
 ## Repository layout
 
 ```
