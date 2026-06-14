@@ -1,4 +1,4 @@
-import { GamepadUiView, RequiredProps, Slider, TTButton, TVNode, UiViewProps } from "@efb/efb-api";
+import { Button, GamepadUiView, RequiredProps, Slider, TTButton, TVNode, UiViewProps } from "@efb/efb-api";
 import { FSComponent, MappedSubject, Subject, VNode } from "@microsoft/msfs-sdk";
 import {
   localNext,
@@ -47,7 +47,6 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
   // Auto-scrolling now-playing marquee (the SDK Marquee only scrolls on hover).
   private readonly npContainer = FSComponent.createRef<HTMLDivElement>();
   private readonly npText = FSComponent.createRef<HTMLSpanElement>();
-  private readonly listRef = FSComponent.createRef<HTMLDivElement>();
 
   private pollHandle = 0;
 
@@ -55,13 +54,6 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
     super.onAfterRender(node);
     setRadioVolume(this.volume.get());
     this.nowPlaying.sub(() => this.updateMarquee());
-
-    // One delegated click handler for the whole station list (rows carry data-idx).
-    this.listRef.instance?.addEventListener("click", (e) => {
-      const row = (e.target as HTMLElement).closest("[data-idx]");
-      if (row) this.toggleStation(parseInt(row.getAttribute("data-idx") ?? "-1", 10));
-    });
-
     this.pollHandle = window.setInterval(() => this.poll(), 300);
   }
 
@@ -210,11 +202,17 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
         <section class="block radio">
           <h3>Radio</h3>
-          <div class="station-list" ref={this.listRef}>
+          <div class="station-list">
             {this.nameSubs.map((nameSub, i) => (
-              <div data-idx={i} class={this.stationRowClass(i)}>
+              <div class={this.stationRowClass(i)}>
                 <span class="marker">{this.selectedSub.map((p) => (p === i ? ">" : ""))}</span>
-                <span class="label">{nameSub}</span>
+                <Button
+                  class="station-btn"
+                  visible={nameSub.map((n) => n.length > 0)}
+                  callback={(): void => this.toggleStation(i)}
+                >
+                  {nameSub}
+                </Button>
               </div>
             ))}
           </div>

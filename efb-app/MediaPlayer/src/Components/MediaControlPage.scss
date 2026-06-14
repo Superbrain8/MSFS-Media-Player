@@ -122,20 +122,23 @@
         color: #2ecc71;
       }
 
-      .label {
+      .station-btn {
         flex: 1;
         padding: 10px 16px;
+        border: none;
         border-radius: 8px;
         background: rgba(52, 152, 219, 0.85);
         color: #fff;
         font-size: 18px;
         font-weight: 600;
+        text-align: left;
         text-transform: uppercase;
         letter-spacing: 0.02em;
-      }
+        cursor: pointer;
 
-      &:hover .label {
-        background: rgba(52, 152, 219, 1);
+        &:hover {
+          background: rgba(52, 152, 219, 1);
+        }
       }
 
       &.selected {
