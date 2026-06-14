@@ -49,7 +49,11 @@ No build tools, git, or SDK needed — just download a zip.
      `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community`
    - **Steam:**
      `%APPDATA%\Microsoft Flight Simulator 2024\Packages\Community`
-   - Not there? Open MSFS → **Options → General → Developers** to see your exact Community path, or check the path you set during install.
+   - Custom install / paths above don't exist? Open `UserCfg.opt` in a text editor and find the
+     `InstalledPackagesPath "..."` line — your **Community** folder is the `Community` subfolder inside
+     that path. `UserCfg.opt` lives at
+     `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\UserCfg.opt` (Store) or
+     `%APPDATA%\Microsoft Flight Simulator 2024\UserCfg.opt` (Steam).
 
    When done, you should have `…\Community\msfs-mediaplayer\manifest.json`.
 4. **Start the companion:** open the `Companion` folder and double-click `MsfsMediaPlayer.Companion.exe`.
