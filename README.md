@@ -1,64 +1,94 @@
 # MSFS Media Player
 
-In-sim media controller for **Microsoft Flight Simulator 2024**: control playback of
-either **local running media** (Spotify/browser/etc. via Windows system controls) and/or
-a selection of **internet radio streams**, surfaced through the EFB tablet.
+In-sim media controller for **Microsoft Flight Simulator 2024**. Control your **local media**
+(Spotify / YouTube / any app via Windows media controls) and play **internet radio** — all from
+the EFB tablet, with radio volume gated by the aircraft's avionics power for immersion.
 
-> Sibling project to the MSFS Rentability Calculator. Reuses the same EFB build/deploy
-> knowledge but is architecturally bigger because audio + OS control can't live in the EFB.
+> Licensed under **AGPL-3.0**. Builds against the MSFS 2024 SDK (SimConnect) — those proprietary
+> DLLs are **not** included; you supply them from your own SDK install. See
+> [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-## The hard constraint (learned from the calculator project)
+## Features
 
-The EFB runs in the **Coherent GT** engine — a sandboxed UI renderer:
-- **No `globalThis`** (use `window`/`self`).
-- **No reliable HTML5 audio / codecs** → cannot play streams in-EFB.
-- **No external network** guarantees (CORS/sandbox).
-- **No OS access / WinRT / shell** → cannot touch Windows media controls.
+- **Local media control** — play/pause, next, previous, and now-playing title for any app that
+  exposes Windows SMTC; a global media-key fallback covers apps that don't (e.g. Qobuz).
+- **Internet radio** — station list with play/stop and volume, via NAudio.
+- **Avionics gating** — radio audio follows `CIRCUIT AVIONICS ON`, so it mutes when the avionics
+  bus is unpowered.
+- **Context-aware transport** — the EFB transport buttons drive the radio when a station is
+  selected, otherwise local media.
+- **Station editor** in the companion tray; the list syncs live to the EFB.
+- Tray status icon (red/green by sim connection), optional start-with-Windows, log retention.
 
-Market check: the closest existing addon uses an **external SimConnect app to stream audio
-into the aircraft ADF** — i.e. audio happens *outside* the EFB. This confirms the only viable
-architecture.
+## How it works
 
-## Architecture
-
-```
-┌─────────────────────────┐        SimConnect          ┌────────────────────────────┐
-│  EFB app (control UI)    │  LVARs / client data /     │  Companion app (.exe, C#)  │
-│  - station list / presets│  custom events  ───────▶   │  - reads commands           │
-│  - play/pause/next       │  ◀── status (now playing)  │  - controls local media via │
-│  - volume                │                            │    Windows SMTC (WinRT)     │
-└─────────────────────────┘                            │  - plays radio stream →     │
-        (sandboxed)                                      │    audio out / ADF route    │
-                                                         └────────────────────────────┘
-                                                              (full OS + network access)
-```
-
-- **EFB app** = thin control surface only (buttons, lists, now-playing text). Same stack as
-  the calculator: TypeScript + TSX + `@efb/efb-api` + esbuild, packaged to `efb_apps/`.
-- **Companion app** = does the real work outside the sandbox:
-  - **Local media:** Windows System Media Transport Controls (`GlobalSystemMediaTransportControlsSessionManager`) for play/pause/next/track info of whatever app is playing.
-  - **Radio:** fetch + decode + play stream (own audio device, or route into the sim's ADF audio like the existing addon).
-  - Bridges to the EFB over **SimConnect** (LVARs or client data areas for commands + status).
-- **The catch:** the user must run the companion `.exe` alongside the sim. That's the cost of doing audio/OS work with MSFS.
-
-## Open decisions (resolve before coding — see docs/DECISIONS.md)
-
-1. **Scope:** radio streams, local-media control, or both? (local-media is the unserved niche; radio may already exist in marketplace.)
-2. **Companion tech:** C# (.NET) with managed SimConnect + WinRT (easiest for SMTC) — confirm.
-3. **Audio route for radio:** own audio output vs ADF-injection (matches sim immersion but more complex).
-4. **EFB↔app channel:** LVARs (simple, limited) vs SimConnect client data area (structured, more setup).
-5. **EFB UI needed at all for v1**, or start companion-app-only with a tray UI?
-
-## Layout (planned)
+The EFB runs in the sandboxed **Coherent GT** engine — no audio codecs, no OS access, no reliable
+network. So the system is split in two, bridged over SimConnect:
 
 ```
-efb-app/        EFB control-surface app (TSX, mirrors calculator structure)
-companion-app/  Windows companion (.NET) — SimConnect bridge + media/audio
+┌─────────────────────────┐      SimConnect LVARs       ┌────────────────────────────┐
+│  EFB app (control UI)    │  commands / volume  ─────▶  │  Companion app (.exe, C#)   │
+│  station list, transport │  ◀─── status + now-playing  │  SMTC + media keys (local)  │
+│  volume, now-playing     │       (packed into LVARs)   │  NAudio radio + SimConnect  │
+└─────────────────────────┘                             └────────────────────────────┘
+        (sandboxed)                                          (full OS + network access)
+```
+
+Strings (now-playing, station names) are packed into numeric LVARs, since the EFB sandbox can't read
+SimConnect client data. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/DECISIONS.md](docs/DECISIONS.md).
+
+## Repository layout
+
+```
+companion-app/  Windows companion (.NET 8) — SMTC, NAudio radio, SimConnect bridge, tray UI
+efb-app/        EFB control-surface app (TS + TSX, @efb/efb-api, esbuild) + packaging
+scripts/        package-release.ps1
 docs/           ARCHITECTURE.md, DECISIONS.md
 ```
 
-## Status
+## Building
 
-Scaffold only. No code yet — pending the scope/architecture decisions above.
-Reusable EFB knowledge carried from the calculator project (Coherent limits, package/deploy
-flow, reload-without-cache) is captured in docs/ and that project's memory.
+**Prerequisites**
+
+- [MSFS 2024 SDK](https://docs.flightsimulator.com/) installed; the `MSFS2024_SDK` environment
+  variable set (the SDK sets this). Provides SimConnect.
+- .NET 8 SDK.
+- Node.js ≥ 18.
+
+**Companion**
+
+```pwsh
+cd companion-app
+dotnet build          # or: dotnet run
+```
+
+**EFB app**
+
+```pwsh
+cd efb-app\efb_api;     npm install   # once
+cd ..\MediaPlayer;      npm install   # once
+npm run build                         # → MediaPlayer/dist/
+```
+
+Then build the MSFS package in-sim via **DevMode** (open `efb-app/MediaPlayerProject.xml`), which
+produces `efb-app/Packages/msfs-mediaplayer/`. Copy/junction that into your MSFS 2024 **Community**
+folder. See [efb-app/README.md](efb-app/README.md).
+
+## Releasing
+
+```pwsh
+.\scripts\package-release.ps1            # framework-dependent companion
+.\scripts\package-release.ps1 -SelfContained
+```
+
+Bundles the published companion + the DevMode-built EFB package + an INSTALL.md into
+`dist/release/`. **Note:** published binaries must not include the proprietary SimConnect DLLs —
+the script can exclude them; recipients copy them from their own MSFS SDK.
+
+## License
+
+[AGPL-3.0](LICENSE) for this project's code. Bundled MIT components and the proprietary SimConnect
+dependency are described in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+This project is not affiliated with or endorsed by Microsoft or Asobo Studio.

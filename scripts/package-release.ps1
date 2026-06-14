@@ -18,7 +18,10 @@
 #>
 param(
   [string]$Version = "0.1.0",
-  [switch]$SelfContained
+  [switch]$SelfContained,
+  # Proprietary SimConnect DLLs are excluded by default (MSFS SDK EULA). Recipients copy them from
+  # their own SDK. Pass -IncludeSimConnect only for a private/local bundle.
+  [switch]$IncludeSimConnect
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,6 +63,15 @@ $companionOut = Join-Path $stage "Companion"
 $scFlag = if ($SelfContained) { "true" } else { "false" }
 Invoke-Native { & $dotnet publish $companionProj -c Release -r win-x64 -o $companionOut --nologo --self-contained $scFlag } "dotnet publish"
 
+# Exclude proprietary SimConnect DLLs unless explicitly requested (MSFS SDK EULA).
+if (-not $IncludeSimConnect) {
+  foreach ($dll in @("SimConnect.dll", "Microsoft.FlightSimulator.SimConnect.dll")) {
+    $p = Join-Path $companionOut $dll
+    if (Test-Path $p) { Remove-Item $p -Force }
+  }
+  Write-Host "Excluded proprietary SimConnect DLLs from the bundle." -ForegroundColor Yellow
+}
+
 # 3. EFB Community package (DevMode-built)
 if (Test-Path $efbPackage) {
   $commOut = Join-Path $stage "Community\msfs-mediaplayer"
@@ -71,13 +83,25 @@ if (Test-Path $efbPackage) {
 }
 
 # 4. INSTALL.md
+$simNote = if ($IncludeSimConnect) {
+  ""
+} else {
+@"
+
+   This build excludes the proprietary SimConnect DLLs. Copy these from your MSFS 2024 SDK into the
+   ``Companion`` folder next to the exe:
+   - ``<SDK>\SimConnect SDK\lib\managed\Microsoft.FlightSimulator.SimConnect.dll``
+   - ``<SDK>\SimConnect SDK\lib\SimConnect.dll``
+"@
+}
+
 $install = @"
 # MSFS Media Player v$Version
 
 ## Install
 1. **Companion app:** copy the ``Companion`` folder anywhere and run ``MsfsMediaPlayer.Companion.exe``.
    (Framework-dependent build needs the .NET 8 Desktop Runtime; the self-contained build does not.)
-   In the tray menu, optionally enable **Start with Windows**.
+   In the tray menu, optionally enable **Start with Windows**.$simNote
 2. **EFB app:** copy ``Community\msfs-mediaplayer`` into your MSFS 2024 Community folder.
 3. Launch MSFS, open the **Media Player** app on the EFB tablet.
 
