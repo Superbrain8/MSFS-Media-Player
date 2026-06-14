@@ -13,6 +13,9 @@ internal static class Log
     private static string _logDir = "";
     private static string _logFile = "";
 
+    // Keep only the newest N run logs (one per launch) so the folder doesn't grow unbounded.
+    private const int MaxLogFiles = 10;
+
     public static void Init()
     {
         _logDir = Path.Combine(
@@ -20,6 +23,19 @@ internal static class Log
             "MsfsMediaPlayer", "logs");
         Directory.CreateDirectory(_logDir);
         _logFile = Path.Combine(_logDir, $"companion-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+        PruneOldLogs();
+    }
+
+    private static void PruneOldLogs()
+    {
+        try
+        {
+            var old = Directory.GetFiles(_logDir, "companion-*.log")
+                .OrderByDescending(f => f)   // names are timestamp-sortable
+                .Skip(MaxLogFiles);
+            foreach (var f in old) File.Delete(f);
+        }
+        catch { /* pruning must never block startup */ }
     }
 
     public static void Info(string message) => Write("INFO", message);

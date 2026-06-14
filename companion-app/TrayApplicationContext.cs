@@ -76,7 +76,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _trayIcon = new NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = AppIcon.CreateTrayIcon(),
             Text = "MSFS Media Player",
             ContextMenuStrip = menu,
             Visible = true,
