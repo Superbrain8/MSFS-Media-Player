@@ -38,16 +38,21 @@ Strings (now-playing, station names) are packed into numeric LVARs, since the EF
 SimConnect client data. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/DECISIONS.md](docs/DECISIONS.md).
 
-## Installing (from a release)
+## Installing (for users)
 
-Grab the latest `MsfsMediaPlayer-v*.zip` from the [Releases](https://github.com/Superbrain8/MSFS-Media-Player/releases) page and unzip it. The release bundles the SimConnect client DLLs, so no SDK install is needed to run it.
+No build tools, git, or SDK needed — just download a zip.
 
-1. **Companion app** — copy the `Companion` folder anywhere and run `MsfsMediaPlayer.Companion.exe`.
-   - The framework-dependent build needs the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0); the self-contained build does not.
-   - It lives in the system tray. Right-click for transport controls, **Edit stations…**, and an optional **Start with Windows** toggle.
-   - The tray icon is **red** when disconnected from the sim, **green** when connected.
-2. **EFB app** — copy `Community\msfs-mediaplayer` into your MSFS 2024 **Community** folder.
-3. Launch MSFS 2024, open the **Media Player** app on the EFB tablet.
+1. Open the **[Releases](https://github.com/Superbrain8/MSFS-Media-Player/releases)** page and download the newest `MsfsMediaPlayer-v*.zip`.
+2. **Unzip it** somewhere you'll keep it (e.g. `Documents`). Inside are two folders: `Companion` and `Community`.
+3. **Install the EFB app:** copy the `Community\msfs-mediaplayer` folder into your MSFS 2024 **Community** folder.
+   - Don't know where that is? In MSFS: **Options → General → Developers**, or it's usually
+     `…\Packages\Community` under your MSFS install (Microsoft Store / Steam paths differ).
+4. **Start the companion:** open the `Companion` folder and double-click `MsfsMediaPlayer.Companion.exe`.
+   - If Windows shows a blue **SmartScreen** box, click **More info → Run anyway** (the app is unsigned).
+   - If it won't start, install the free [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) and try again. (The self-contained release doesn't need this.)
+   - It runs in the **system tray** (bottom-right, near the clock). Right-click the icon for controls.
+     The icon is **red** when not connected to the sim, **green** when connected.
+5. **Launch MSFS 2024**, open the EFB tablet, and tap the **Media Player** app.
 
 ### Using it
 
