@@ -44,12 +44,16 @@ No build tools, git, or SDK needed — just download a zip.
 
 1. Open the **[Releases](https://github.com/Superbrain8/MSFS-Media-Player/releases)** page and download the newest `MsfsMediaPlayer-v*.zip`.
 2. **Unzip it** somewhere you'll keep it (e.g. `Documents`). Inside are two folders: `Companion` and `Community`.
-3. **Install the EFB app:** copy the `Community\msfs-mediaplayer` folder into your MSFS 2024 **Community** folder.
-   - Don't know where that is? In MSFS: **Options → General → Developers**, or it's usually
-     `…\Packages\Community` under your MSFS install (Microsoft Store / Steam paths differ).
+3. **Install the EFB app:** copy the `msfs-mediaplayer` folder (inside the zip's `Community` folder) into your MSFS 2024 **Community** folder. Common locations — paste the path into File Explorer's address bar:
+   - **Microsoft Store / Game Pass:**
+     `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community`
+   - **Steam:**
+     `%APPDATA%\Microsoft Flight Simulator 2024\Packages\Community`
+   - Not there? Open MSFS → **Options → General → Developers** to see your exact Community path, or check the path you set during install.
+
+   When done, you should have `…\Community\msfs-mediaplayer\manifest.json`.
 4. **Start the companion:** open the `Companion` folder and double-click `MsfsMediaPlayer.Companion.exe`.
    - If Windows shows a blue **SmartScreen** box, click **More info → Run anyway** (the app is unsigned).
-   - If it won't start, install the free [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) and try again. (The self-contained release doesn't need this.)
    - It runs in the **system tray** (bottom-right, near the clock). Right-click the icon for controls.
      The icon is **red** when not connected to the sim, **green** when connected.
 5. **Launch MSFS 2024**, open the EFB tablet, and tap the **Media Player** app.
