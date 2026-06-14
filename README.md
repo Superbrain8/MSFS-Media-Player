@@ -40,35 +40,68 @@ SimConnect client data. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 
 ## Installing (for users)
 
-No build tools, git, or SDK needed — just download a zip.
+You don't need any coding tools. Just download one file and copy a folder. Follow these steps in order.
 
-1. Open the **[Releases](https://github.com/Superbrain8/MSFS-Media-Player/releases)** page and download the newest `MsfsMediaPlayer-v*.zip`.
-2. **Unzip it** somewhere you'll keep it (e.g. `Documents`). Inside are two folders: `Companion` and `Community`.
-3. **Install the EFB app:** copy the `msfs-mediaplayer` folder (inside the zip's `Community` folder) into your MSFS 2024 **Community** folder. Common locations — paste the path into File Explorer's address bar:
-   - **Microsoft Store / Game Pass:**
-     `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community`
-   - **Steam:**
-     `%APPDATA%\Microsoft Flight Simulator 2024\Packages\Community`
-   - Custom install / paths above don't exist? Open `UserCfg.opt` in a text editor and find the
-     `InstalledPackagesPath "..."` line — your **Community** folder is the `Community` subfolder inside
-     that path. `UserCfg.opt` lives at
-     `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\UserCfg.opt` (Store) or
-     `%APPDATA%\Microsoft Flight Simulator 2024\UserCfg.opt` (Steam).
+### Step 1 — Download
 
-   When done, you should have `…\Community\msfs-mediaplayer\manifest.json`.
-4. **Start the companion:** open the `Companion` folder and double-click `MsfsMediaPlayer.Companion.exe`.
-   - If Windows shows a blue **SmartScreen** box, click **More info → Run anyway** (the app is unsigned).
-   - It runs in the **system tray** (bottom-right, near the clock). Right-click the icon for controls.
-     The icon is **red** when not connected to the sim, **green** when connected.
-5. **Launch MSFS 2024**, open the EFB tablet, and tap the **Media Player** app.
+1. Go to the **[Releases page](https://github.com/Superbrain8/MSFS-Media-Player/releases)**.
+2. Click the file named **`MsfsMediaPlayer-v0.1.0.zip`** to download it.
 
-### Using it
+### Step 2 — Unzip
 
-- **Local media** (Spotify / YouTube / Qobuz / any app with Windows media controls): use the transport buttons on the EFB. Now-playing title scrolls across the top.
-- **Internet radio**: tap a station to play it (tap again to stop). The transport buttons control the radio while a station is selected, otherwise local media. Radio volume is gated by avionics power — it mutes when the avionics bus is off.
-- **Edit stations**: companion tray → **Edit stations…** (name + URL grid). Saves sync live to the EFB.
+1. Find the downloaded `.zip` file (usually in your **Downloads** folder).
+2. **Right-click it → "Extract All…" → Extract.**
+3. A new folder opens. Inside it are **two** folders: **`Companion`** and **`Community`**.
 
-> Defender SmartScreen may warn on the unsigned exe — **More info → Run anyway**.
+### Step 3 — Put the tablet app into the game
+
+The game looks for add-ons in a folder called **Community**. You need to copy our folder into it.
+
+1. Press the **Windows key + R** on your keyboard. A small box pops up.
+2. Copy **one** of these and paste it into that box, then press **Enter**:
+   - If you bought the game on **Steam:**
+     ```
+     %APPDATA%\Microsoft Flight Simulator 2024\Packages\Community
+     ```
+   - If you got it from the **Microsoft Store / Xbox Game Pass:**
+     ```
+     %LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community
+     ```
+   A File Explorer window opens showing your **Community** folder. (If you get an error, see *"Can't find Community?"* below.)
+3. Go back to the unzipped files. Open the **`Community`** folder there — inside is a folder called **`msfs-mediaplayer`**.
+4. **Copy `msfs-mediaplayer`** (Ctrl+C) and **paste it** (Ctrl+V) into the Community window from step 2.
+5. ✅ Done right if you now have a file at `…\Community\msfs-mediaplayer\manifest.json`.
+
+<details>
+<summary><b>Can't find Community?</b> (custom install)</summary>
+
+Open the file `UserCfg.opt` in Notepad and look for a line like `InstalledPackagesPath "C:\...\Packages"`. Your Community folder is the `Community` folder inside that path. `UserCfg.opt` is here:
+- Steam: `%APPDATA%\Microsoft Flight Simulator 2024\UserCfg.opt`
+- Store: `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\UserCfg.opt`
+</details>
+
+### Step 4 — Start the helper app
+
+This little app runs on your PC and does the actual music/radio playing.
+
+1. Go back to the unzipped files and open the **`Companion`** folder.
+2. Double-click **`MsfsMediaPlayer.Companion.exe`**.
+3. If a blue **"Windows protected your PC"** box appears: click **"More info"**, then **"Run anyway"**. (It's safe — it's just not signed.)
+4. Nothing big happens on screen — that's normal. A small **music-note icon** appears near the clock (bottom-right). **Right-click it** to see the controls.
+   - The icon is **red** when not connected to the game, **green** when connected.
+   - Tip: right-click it → **"Start with Windows"** so it opens automatically next time.
+
+### Step 5 — Play!
+
+1. Start **MSFS 2024**.
+2. In the cockpit, open the **EFB tablet** and tap the **Media Player** app.
+
+### How to use it
+
+- **Music** (Spotify / YouTube / Qobuz / any app): use the play / next / previous buttons on the tablet. The song title scrolls along the top.
+- **Radio**: tap a station to start it; tap it again to stop. While a station is on, the buttons control the radio; otherwise they control your music.
+- Radio sound follows the plane's **avionics power** — turn avionics off and the radio goes quiet.
+- **Add or change stations**: right-click the tray icon → **"Edit stations…"**, type a name and a stream URL, Save. The list updates on the tablet right away.
 
 ## Repository layout
 
