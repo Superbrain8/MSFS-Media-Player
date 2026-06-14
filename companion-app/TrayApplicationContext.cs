@@ -145,6 +145,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _trayIcon.Text = tip.Length > MaxTooltip ? tip[..MaxTooltip] : tip;
 
         _sim.SetLocalStatus(np.HasSession && np.IsPlaying);
+        // Em-dash isn't in Latin-1 (the packed-text encoding) and the EFB font boxes it anyway.
+        _sim.SetNowPlayingText(np.HasSession ? np.Display.Replace('—', '-') : "");
     }
 
     private void RenderRadio(RadioStatus rs)

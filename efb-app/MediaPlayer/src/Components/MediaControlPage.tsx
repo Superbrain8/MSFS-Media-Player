@@ -6,6 +6,7 @@ import {
   localPrev,
   radioPlay,
   radioStop,
+  readNowPlayingText,
   readStatus,
   setRadioVolume,
   Stations,
@@ -35,12 +36,35 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
   private selectedIdx = -1;
   private radioPlaying = false;
 
+  // Auto-scrolling now-playing marquee (the SDK Marquee only scrolls on hover).
+  private readonly npContainer = FSComponent.createRef<HTMLDivElement>();
+  private readonly npText = FSComponent.createRef<HTMLSpanElement>();
+
   private pollHandle = 0;
 
   public onAfterRender(node: VNode): void {
     super.onAfterRender(node);
     setRadioVolume(this.volume.get());
+    this.nowPlaying.sub(() => this.updateMarquee());
     this.pollHandle = window.setInterval(() => this.poll(), 300);
+  }
+
+  /** Animate the now-playing text only when it overflows its container; otherwise leave it still. */
+  private updateMarquee(): void {
+    window.requestAnimationFrame(() => {
+      const box = this.npContainer.instance;
+      const text = this.npText.instance;
+      if (!box || !text) return;
+      const overflow = text.scrollWidth - box.clientWidth;
+      if (overflow > 2) {
+        text.style.setProperty("--np-shift", `${-overflow}px`);
+        text.style.setProperty("--np-dur", `${Math.max(4, overflow / 40)}s`); // ~40 px/s
+        text.classList.add("np-scroll");
+      } else {
+        text.classList.remove("np-scroll");
+        text.style.removeProperty("--np-shift");
+      }
+    });
   }
 
   public destroy(): void {
@@ -60,7 +84,7 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
       const name = Stations[this.selectedIdx] ?? "station";
       this.nowPlaying.set(s.radioPlaying ? `Radio: ${name}` : `Radio (paused): ${name}`);
     } else if (s.localPlaying) {
-      this.nowPlaying.set("Local media playing");
+      this.nowPlaying.set(readNowPlayingText() || "Local media playing");
     } else {
       this.nowPlaying.set("Idle");
     }
@@ -120,7 +144,11 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
         {/* Clears the EFB shell's top bar. Inline style bypasses the cached coui:// stylesheet. */}
         <div class="top-safe" style="flex: 0 0 auto; height: 96px; width: 100%;" />
         <div class="np-bar">
-          <span class="now-playing">{this.nowPlaying}</span>
+          <div class="now-playing" ref={this.npContainer}>
+            <span class="np-text" ref={this.npText}>
+              {this.nowPlaying}
+            </span>
+          </div>
           <span class={this.gateOpen.map((o) => (o ? "gate ok" : "gate muted"))}>
             {this.gateOpen.map((o) => (o ? "Avionics ON" : "Avionics OFF (muted)"))}
           </span>

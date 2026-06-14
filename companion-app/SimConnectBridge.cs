@@ -46,6 +46,15 @@ internal sealed class SimConnectBridge : IDisposable
     private const string LVAR_LOCAL_PLAYING = "L:MEDIAPLAYER_LOCAL_PLAYING";
     private const string LVAR_GATE = "L:MEDIAPLAYER_GATE";
 
+    // Now-playing TEXT packed into numeric LVARs (LVARs are the only EFB-readable channel; the EFB
+    // sandbox can't read SimConnect client data). 6 Latin-1 chars per double × 10 = 60 chars.
+    // Encoding mirrored in efb-app/.../bridge/MediaBridge.ts.
+    private const int NP_SLOTS = 16;
+    private const int NP_CHARS_PER_SLOT = 6;
+    private const int DEF_NP_BASE = 30; // defs 30..45
+    private const string LVAR_NP_PREFIX = "L:MEDIAPLAYER_NP";
+    private string _lastNp = "";
+
     private bool _lvarsReady;
 
     private readonly MessageWindow _window;
@@ -142,8 +151,10 @@ internal sealed class SimConnectBridge : IDisposable
             DefineLvar(DEF_STATUS_RADIO_IDX, LVAR_RADIO_IDX);
             DefineLvar(DEF_STATUS_LOCAL_PLAYING, LVAR_LOCAL_PLAYING);
             DefineLvar(DEF_STATUS_GATE, LVAR_GATE);
+            for (int i = 0; i < NP_SLOTS; i++) DefineLvar(DEF_NP_BASE + i, $"{LVAR_NP_PREFIX}{i}");
 
             _lvarsReady = true;
+            _lastNp = ""; // force a re-push of now-playing text on (re)connect
             WriteLvar(DEF_STATUS_GATE, _gate >= 0.5f ? 1 : 0); // push initial gate
             Log.Info("SimConnect: LVAR bridge ready");
         }
@@ -169,6 +180,32 @@ internal sealed class SimConnectBridge : IDisposable
 
     /// <summary>EFB → companion local-media status.</summary>
     public void SetLocalStatus(bool playing) => WriteLvar(DEF_STATUS_LOCAL_PLAYING, playing ? 1 : 0);
+
+    /// <summary>
+    /// Push now-playing text to the EFB, packed as 6 Latin-1 chars per LVAR double (10 LVARs → 60
+    /// chars). Char 0 terminates. Decoded identically in MediaBridge.ts.
+    /// </summary>
+    public void SetNowPlayingText(string text)
+    {
+        if (text == _lastNp) return;
+        _lastNp = text;
+        Log.Info($"NP text → '{text}' (lvarsReady={_lvarsReady})");
+
+        var bytes = System.Text.Encoding.Latin1.GetBytes(text); // unmappable chars → '?'
+        for (int slot = 0; slot < NP_SLOTS; slot++)
+        {
+            double value = 0;
+            double mul = 1;
+            for (int k = 0; k < NP_CHARS_PER_SLOT; k++)
+            {
+                int idx = slot * NP_CHARS_PER_SLOT + k;
+                byte b = idx < bytes.Length ? bytes[idx] : (byte)0;
+                value += b * mul;
+                mul *= 256;
+            }
+            WriteLvar(DEF_NP_BASE + slot, value);
+        }
+    }
 
     private void WriteLvar(int defId, double value)
     {

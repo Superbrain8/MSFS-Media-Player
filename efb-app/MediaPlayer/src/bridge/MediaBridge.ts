@@ -67,6 +67,26 @@ export function setRadioVolume(volume0to100: number): void {
   SimVar.SetSimVarValue(LVar.RadioVol, NUMBER, v);
 }
 
+// Now-playing text packed into numeric LVARs by the companion (LVARs are the only EFB-readable
+// channel). 6 Latin-1 chars per double × 10 = 60 chars; char 0 terminates. Must match
+// SimConnectBridge.cs.
+const NP_SLOTS = 16;
+const NP_CHARS_PER_SLOT = 6;
+
+/** Decode the companion's packed now-playing text. Empty string = nothing. */
+export function readNowPlayingText(): string {
+  let out = "";
+  for (let slot = 0; slot < NP_SLOTS; slot++) {
+    const value = SimVar.GetSimVarValue(`L:MEDIAPLAYER_NP${slot}`, NUMBER);
+    for (let k = 0; k < NP_CHARS_PER_SLOT; k++) {
+      const code = Math.floor(value / 256 ** k) % 256;
+      if (code === 0) return out;
+      out += String.fromCharCode(code);
+    }
+  }
+  return out;
+}
+
 export interface MediaStatus {
   radioPlaying: boolean;
   radioIdx: number;

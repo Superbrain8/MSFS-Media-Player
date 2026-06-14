@@ -1,3 +1,12 @@
+@keyframes np-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--np-shift, 0));
+  }
+}
+
 .media-control-page {
   display: flex;
   flex-direction: column;
@@ -25,13 +34,23 @@
     background: rgba(255, 255, 255, 0.06);
 
     .now-playing {
+      // Clips the text; the inner span auto-scrolls (via JS) only when it overflows.
       flex: 1;
       min-width: 0;
+      overflow: hidden;
       font-size: 26px;
       font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+
+      .np-text {
+        display: inline-block;
+        white-space: nowrap;
+        will-change: transform;
+
+        &.np-scroll {
+          // Ping-pong between 0 and --np-shift (set inline by JS).
+          animation: np-marquee var(--np-dur, 8s) linear infinite alternate;
+        }
+      }
     }
 
     .gate {
