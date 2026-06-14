@@ -26,6 +26,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly SimConnectBridge _sim = new();
     private readonly ToolStripMenuItem _simStatusItem;
 
+    private readonly ToolStripMenuItem _updateItem;
+    private bool _updateAvailable;
+
     private List<RadioStation> _stations = StationStore.Load().ToList();
     private readonly ToolStripMenuItem _stationsMenu = new("Play station");
 
@@ -55,7 +58,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
         // --- Sim ---
         _simStatusItem = new ToolStripMenuItem("Sim: disconnected") { Enabled = false };
 
+        // Hidden until a newer release is found on GitHub (see CheckForUpdatesAsync).
+        _updateItem = new ToolStripMenuItem("Update available", null, (_, _) => UpdateChecker.OpenReleasesPage())
+        {
+            Visible = false,
+        };
+
         var menu = new ContextMenuStrip();
+        menu.Items.Add(_updateItem);
         menu.Items.Add(_nowPlayingItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_prevItem);
@@ -90,6 +100,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         };
 
         _trayIcon.ShowBalloonTip(2000, "MSFS Media Player", "Companion running.", ToolTipIcon.Info);
+        _trayIcon.BalloonTipClicked += (_, _) => { if (_updateAvailable) UpdateChecker.OpenReleasesPage(); };
 
         // Defer SMTC init until the WinForms message loop is pumping, so SynchronizationContext.Current
         // is the WindowsFormsSynchronizationContext we can marshal WinRT/NAudio callbacks back onto.
@@ -107,10 +118,26 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _sim.VolumeReceived += v => _ui?.Post(_ => _radio.Volume = v / 100f, null);
             _sim.SetStationList(_stations.Select(s => s.Name)); // pushed to EFB on connect
             _sim.Start();
+            _ = CheckForUpdatesAsync();
             try { await _media.InitAsync(); }
             catch (Exception ex) { Log.Error($"MediaController init failed: {ex.Message}"); }
         };
         startup.Start();
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        var result = await UpdateChecker.CheckAsync();
+        if (result is null) return;
+        _ui?.Post(_ =>
+        {
+            _updateAvailable = true;
+            _updateItem.Text = $"Update available: {result.Value.Tag} ↗";
+            _updateItem.Visible = true;
+            _trayIcon.ShowBalloonTip(6000, "MSFS Media Player update",
+                $"Version {result.Value.Tag} is available — click to download.", ToolTipIcon.Info);
+            Log.Info($"Update available: {result.Value.Tag} (running {UpdateChecker.Current})");
+        }, null);
     }
 
     private void OnMediaChanged(NowPlaying np) => _ui?.Post(_ => RenderMedia(np), null);
