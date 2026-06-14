@@ -29,6 +29,7 @@ internal sealed class SimConnectBridge : IDisposable
 
     private enum Define { }   // ids cast from int (probe index / the DEF_* constants below)
     private enum Request { }
+    private enum SysEvent { FlightLoaded = 1 } // L:vars reset on flight load → re-push bridge state
 
     // --- EFB↔companion LVAR bridge (P4). Names mirror efb-app/.../bridge/MediaBridge.ts. ---
     // Define/request ids kept clear of the probe index range (0..AdfProbes.Length-1).
@@ -68,6 +69,9 @@ internal sealed class SimConnectBridge : IDisposable
 
     private readonly MessageWindow _window;
     private readonly System.Windows.Forms.Timer _reconnectTimer;
+    // One-shot re-push a couple seconds after FlightLoaded, in case the event fires before MSFS
+    // finishes zeroing the L:vars (the immediate re-push would then be wiped).
+    private readonly System.Windows.Forms.Timer _repushTimer;
     private SimConnect? _sc;
     private bool _disposed;
 
@@ -97,6 +101,8 @@ internal sealed class SimConnectBridge : IDisposable
         _window = new MessageWindow(HandleMessage);
         _reconnectTimer = new System.Windows.Forms.Timer { Interval = 3000 };
         _reconnectTimer.Tick += (_, _) => TryConnect();
+        _repushTimer = new System.Windows.Forms.Timer { Interval = 2500 };
+        _repushTimer.Tick += (_, _) => { _repushTimer.Stop(); RepushBridgeState(); };
     }
 
     public void Start()
@@ -115,6 +121,7 @@ internal sealed class SimConnectBridge : IDisposable
             _sc.OnRecvQuit += OnQuit;
             _sc.OnRecvException += OnException;
             _sc.OnRecvSimobjectData += OnSimObjectData;
+            _sc.OnRecvEvent += OnEvent;
             Log.Info("SimConnect: attempting connection");
         }
         catch (COMException)
@@ -139,6 +146,29 @@ internal sealed class SimConnectBridge : IDisposable
         ConnectionChanged?.Invoke(true);
         SetupAdfProbes();
         SetupLvars();
+        try { sender.SubscribeToSystemEvent(SysEvent.FlightLoaded, "FlightLoaded"); }
+        catch (Exception ex) { Log.Warn($"FlightLoaded subscribe failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// MSFS resets all L:vars to 0 when a flight (re)loads, but SimConnect stays connected (no
+    /// OnQuit), so our once-on-connect pushes are lost. Re-push the bridge state on FlightLoaded.
+    /// </summary>
+    private void OnEvent(SimConnect sender, SIMCONNECT_RECV_EVENT data)
+    {
+        if ((SysEvent)data.uEventID != SysEvent.FlightLoaded) return;
+        Log.Info("SimConnect: FlightLoaded — re-pushing bridge state");
+        RepushBridgeState();              // immediate
+        _repushTimer.Stop();
+        _repushTimer.Start();             // and again after the L:vars settle (race backup)
+    }
+
+    private void RepushBridgeState()
+    {
+        if (!_lvarsReady) return;
+        _lastNp = "";                                         // force NP re-push on next poll
+        WriteStationList();                                   // re-push station list
+        WriteLvar(DEF_STATUS_GATE, _gate >= 0.5f ? 1 : 0);   // re-push current gate
     }
 
     /// <summary>P4: register the EFB command/volume reads and the status writes.</summary>
@@ -365,6 +395,8 @@ internal sealed class SimConnectBridge : IDisposable
         _disposed = true;
         _reconnectTimer.Stop();
         _reconnectTimer.Dispose();
+        _repushTimer.Stop();
+        _repushTimer.Dispose();
         Disconnect();
         _window.ReleaseHandle();
     }
