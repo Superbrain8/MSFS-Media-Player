@@ -18,12 +18,14 @@ etc.) is adapted from the MSFS 2024 SDK EFB sample template (Asobo Studio, MIT).
 
 - **NAudio** — © Mark Heath & contributors — MIT License.
 
-## Not redistributed (supplied by the user's MSFS SDK)
+## SimConnect (Microsoft, proprietary)
 
-- **SimConnect** — `Microsoft.FlightSimulator.SimConnect.dll` (managed wrapper) and
-  `SimConnect.dll` (native) are **proprietary Microsoft components** from the MSFS 2024 SDK.
-  They are **not** included in this repository or in published binaries. The build references
-  them from your local SDK via the `MSFS2024_SDK` environment variable, and copies the native
-  DLL next to the built executable for local use only. To run a build, install the
-  **MSFS 2024 SDK** yourself. Redistribution of these DLLs is governed by the Microsoft
-  Flight Simulator SDK EULA, not by this project's license.
+- `Microsoft.FlightSimulator.SimConnect.dll` (managed wrapper) and `SimConnect.dll` (native) are
+  **proprietary Microsoft components** from the MSFS 2024 SDK, **not** covered by this project's
+  AGPL license.
+- They are **not committed to this repository** — the build references them from your local SDK via
+  the `MSFS2024_SDK` environment variable, so contributors install the MSFS 2024 SDK themselves.
+- Binary **releases bundle the SimConnect client DLLs** so the app runs without the SDK, as is
+  standard for MSFS add-ons (SimConnect is the redistributable client interface). Their use/
+  redistribution is governed by the Microsoft Flight Simulator SDK EULA. Use
+  `package-release.ps1 -ExcludeSimConnect` to build a release without them.

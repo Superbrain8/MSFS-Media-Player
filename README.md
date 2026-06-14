@@ -83,8 +83,10 @@ folder. See [efb-app/README.md](efb-app/README.md).
 ```
 
 Bundles the published companion + the DevMode-built EFB package + an INSTALL.md into
-`dist/release/`. **Note:** published binaries must not include the proprietary SimConnect DLLs —
-the script can exclude them; recipients copy them from their own MSFS SDK.
+`dist/release/`. By default it ships the **SimConnect** client DLLs (Microsoft, proprietary) so the
+app runs out of the box — standard practice for MSFS add-ons. Pass `-ExcludeSimConnect` to omit them
+(recipients then copy them from their own MSFS SDK). The DLLs are **not** committed to this repo;
+contributors build against their own SDK.
 
 ## License
 

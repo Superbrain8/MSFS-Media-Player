@@ -19,9 +19,10 @@
 param(
   [string]$Version = "0.1.0",
   [switch]$SelfContained,
-  # Proprietary SimConnect DLLs are excluded by default (MSFS SDK EULA). Recipients copy them from
-  # their own SDK. Pass -IncludeSimConnect only for a private/local bundle.
-  [switch]$IncludeSimConnect
+  # SimConnect (Microsoft, proprietary) is bundled by default — the app needs it to run and shipping
+  # the SimConnect client is standard for MSFS add-ons. Pass -ExcludeSimConnect to omit it (then
+  # recipients copy it from their own MSFS SDK).
+  [switch]$ExcludeSimConnect
 )
 
 $ErrorActionPreference = "Stop"
@@ -63,13 +64,15 @@ $companionOut = Join-Path $stage "Companion"
 $scFlag = if ($SelfContained) { "true" } else { "false" }
 Invoke-Native { & $dotnet publish $companionProj -c Release -r win-x64 -o $companionOut --nologo --self-contained $scFlag } "dotnet publish"
 
-# Exclude proprietary SimConnect DLLs unless explicitly requested (MSFS SDK EULA).
-if (-not $IncludeSimConnect) {
+# SimConnect DLLs ship by default (needed to run); -ExcludeSimConnect omits them.
+if ($ExcludeSimConnect) {
   foreach ($dll in @("SimConnect.dll", "Microsoft.FlightSimulator.SimConnect.dll")) {
     $p = Join-Path $companionOut $dll
     if (Test-Path $p) { Remove-Item $p -Force }
   }
-  Write-Host "Excluded proprietary SimConnect DLLs from the bundle." -ForegroundColor Yellow
+  Write-Host "Excluded SimConnect DLLs from the bundle." -ForegroundColor Yellow
+} else {
+  Write-Host "Bundled SimConnect (Microsoft, proprietary)." -ForegroundColor Green
 }
 
 # 3. EFB Community package (DevMode-built)
@@ -83,16 +86,16 @@ if (Test-Path $efbPackage) {
 }
 
 # 4. INSTALL.md
-$simNote = if ($IncludeSimConnect) {
-  ""
-} else {
+$simNote = if ($ExcludeSimConnect) {
 @"
 
-   This build excludes the proprietary SimConnect DLLs. Copy these from your MSFS 2024 SDK into the
+   This build excludes the SimConnect DLLs. Copy these from your MSFS 2024 SDK into the
    ``Companion`` folder next to the exe:
    - ``<SDK>\SimConnect SDK\lib\managed\Microsoft.FlightSimulator.SimConnect.dll``
    - ``<SDK>\SimConnect SDK\lib\SimConnect.dll``
 "@
+} else {
+  ""
 }
 
 $install = @"
