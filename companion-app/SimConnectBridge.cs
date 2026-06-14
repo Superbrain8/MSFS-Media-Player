@@ -46,14 +46,23 @@ internal sealed class SimConnectBridge : IDisposable
     private const string LVAR_LOCAL_PLAYING = "L:MEDIAPLAYER_LOCAL_PLAYING";
     private const string LVAR_GATE = "L:MEDIAPLAYER_GATE";
 
-    // Now-playing TEXT packed into numeric LVARs (LVARs are the only EFB-readable channel; the EFB
-    // sandbox can't read SimConnect client data). 6 Latin-1 chars per double × 10 = 60 chars.
-    // Encoding mirrored in efb-app/.../bridge/MediaBridge.ts.
+    // Text packed into numeric LVARs (LVARs are the only EFB-readable channel; the EFB sandbox can't
+    // read SimConnect client data). 6 Latin-1 chars per double. Encoding mirrored in MediaBridge.ts.
+    private const int CHARS_PER_SLOT = 6;
+
+    // Now-playing text: 16 slots × 6 = 96 chars.
     private const int NP_SLOTS = 16;
-    private const int NP_CHARS_PER_SLOT = 6;
     private const int DEF_NP_BASE = 30; // defs 30..45
-    private const string LVAR_NP_PREFIX = "L:MEDIAPLAYER_NP";
     private string _lastNp = "";
+
+    // Station list: count + up to 12 names × 6 slots (36 chars each). Pushed to the EFB on connect.
+    private const int MAX_STATIONS_TX = 12;
+    private const int NAME_SLOTS = 6;
+    private const int DEF_STATION_COUNT = 50;
+    private const int DEF_STATION_BASE = 51; // defs 51..(51 + 12*6 - 1)
+    private const string LVAR_STATION_COUNT = "L:MEDIAPLAYER_STATION_COUNT";
+    private const string LVAR_STN_PREFIX = "L:MEDIAPLAYER_STN";
+    private string[] _stationNames = Array.Empty<string>();
 
     private bool _lvarsReady;
 
@@ -151,11 +160,15 @@ internal sealed class SimConnectBridge : IDisposable
             DefineLvar(DEF_STATUS_RADIO_IDX, LVAR_RADIO_IDX);
             DefineLvar(DEF_STATUS_LOCAL_PLAYING, LVAR_LOCAL_PLAYING);
             DefineLvar(DEF_STATUS_GATE, LVAR_GATE);
-            for (int i = 0; i < NP_SLOTS; i++) DefineLvar(DEF_NP_BASE + i, $"{LVAR_NP_PREFIX}{i}");
+            for (int i = 0; i < NP_SLOTS; i++) DefineLvar(DEF_NP_BASE + i, $"L:MEDIAPLAYER_NP{i}");
+            DefineLvar(DEF_STATION_COUNT, LVAR_STATION_COUNT);
+            for (int n = 0; n < MAX_STATIONS_TX * NAME_SLOTS; n++)
+                DefineLvar(DEF_STATION_BASE + n, $"{LVAR_STN_PREFIX}{n}");
 
             _lvarsReady = true;
             _lastNp = ""; // force a re-push of now-playing text on (re)connect
             WriteLvar(DEF_STATUS_GATE, _gate >= 0.5f ? 1 : 0); // push initial gate
+            WriteStationList(); // push the station list on (re)connect
             Log.Info("SimConnect: LVAR bridge ready");
         }
         catch (Exception ex)
@@ -190,20 +203,39 @@ internal sealed class SimConnectBridge : IDisposable
         if (text == _lastNp) return;
         _lastNp = text;
         Log.Info($"NP text → '{text}' (lvarsReady={_lvarsReady})");
+        WritePackedString(DEF_NP_BASE, NP_SLOTS, text);
+    }
 
+    /// <summary>Set the station list shown in the EFB; pushed now if connected, else on next connect.</summary>
+    public void SetStationList(IEnumerable<string> names)
+    {
+        _stationNames = names.Take(MAX_STATIONS_TX).ToArray();
+        if (_lvarsReady) WriteStationList();
+    }
+
+    private void WriteStationList()
+    {
+        WriteLvar(DEF_STATION_COUNT, _stationNames.Length);
+        for (int i = 0; i < _stationNames.Length; i++)
+            WritePackedString(DEF_STATION_BASE + i * NAME_SLOTS, NAME_SLOTS, _stationNames[i]);
+    }
+
+    /// <summary>Pack a string into <paramref name="slots"/> consecutive LVAR defs, 6 Latin-1 chars each.</summary>
+    private void WritePackedString(int baseDefId, int slots, string text)
+    {
         var bytes = System.Text.Encoding.Latin1.GetBytes(text); // unmappable chars → '?'
-        for (int slot = 0; slot < NP_SLOTS; slot++)
+        for (int slot = 0; slot < slots; slot++)
         {
             double value = 0;
             double mul = 1;
-            for (int k = 0; k < NP_CHARS_PER_SLOT; k++)
+            for (int k = 0; k < CHARS_PER_SLOT; k++)
             {
-                int idx = slot * NP_CHARS_PER_SLOT + k;
+                int idx = slot * CHARS_PER_SLOT + k;
                 byte b = idx < bytes.Length ? bytes[idx] : (byte)0;
                 value += b * mul;
                 mul *= 256;
             }
-            WriteLvar(DEF_NP_BASE + slot, value);
+            WriteLvar(baseDefId + slot, value);
         }
     }
 

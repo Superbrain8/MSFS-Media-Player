@@ -104,17 +104,38 @@
     .station {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       padding: 4px 10px;
       border-radius: 10px;
       border-left: 4px solid transparent;
       transition: background 0.12s ease;
+      cursor: pointer;
+
+      &.hidden {
+        display: none;
+      }
 
       .marker {
-        width: 20px;
+        width: 18px;
         text-align: center;
         font-size: 18px;
         color: #2ecc71;
+      }
+
+      .label {
+        flex: 1;
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: rgba(52, 152, 219, 0.85);
+        color: #fff;
+        font-size: 18px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+
+      &:hover .label {
+        background: rgba(52, 152, 219, 1);
       }
 
       &.selected {

@@ -100,6 +100,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _sim.AdfGateChanged += g => _ui?.Post(_ => _radio.AdfGate = g, null);
             _sim.CommandReceived += code => _ui?.Post(_ => DispatchCommand(code), null);
             _sim.VolumeReceived += v => _ui?.Post(_ => _radio.Volume = v / 100f, null);
+            _sim.SetStationList(_stations.Select(s => s.Name)); // pushed to EFB on connect
             _sim.Start();
             try { await _media.InitAsync(); }
             catch (Exception ex) { Log.Error($"MediaController init failed: {ex.Message}"); }

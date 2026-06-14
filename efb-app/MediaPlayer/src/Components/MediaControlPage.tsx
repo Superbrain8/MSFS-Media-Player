@@ -1,15 +1,16 @@
 import { GamepadUiView, RequiredProps, Slider, TTButton, TVNode, UiViewProps } from "@efb/efb-api";
-import { FSComponent, Subject, VNode } from "@microsoft/msfs-sdk";
+import { FSComponent, MappedSubject, Subject, VNode } from "@microsoft/msfs-sdk";
 import {
   localNext,
   localPlayPause,
   localPrev,
+  MAX_STATIONS,
   radioPlay,
   radioStop,
   readNowPlayingText,
+  readStations,
   readStatus,
   setRadioVolume,
-  Stations,
 } from "../bridge/MediaBridge";
 import "./MediaControlPage.scss";
 
@@ -20,7 +21,8 @@ const INITIAL_VOLUME = 60;
 /**
  * The whole control surface: local-media transport, a vertical radio station list (the playing
  * station is highlighted), a volume slider, and live status polled from the companion's LVARs.
- * Thin — all real work happens in the companion.
+ * The station list is pushed by the companion (its configured stations). Thin — all real work
+ * happens in the companion.
  */
 export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControlPageProps> {
   public readonly tabName = MediaControlPage.name;
@@ -31,14 +33,21 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
   private readonly selectedSub = Subject.create(-1);
   private readonly volume = Subject.create(INITIAL_VOLUME);
 
+  // Station list from the companion. Fixed MAX_STATIONS rows are rendered; each name Subject is ""
+  // for absent stations (those rows hide). `stations` holds the current names for transport logic.
+  private stations: string[] = [];
+  private stationsKey = "";
+  private readonly nameSubs = Array.from({ length: MAX_STATIONS }, () => Subject.create(""));
+
   // "Radio mode" = a station is selected (selectedIdx >= 0); it stays selected while paused, and is
-  // only cleared by Stop. Transport drives the radio in this mode, otherwise local media.
+  // only cleared by tapping it again. Transport drives the radio in this mode, otherwise local media.
   private selectedIdx = -1;
   private radioPlaying = false;
 
   // Auto-scrolling now-playing marquee (the SDK Marquee only scrolls on hover).
   private readonly npContainer = FSComponent.createRef<HTMLDivElement>();
   private readonly npText = FSComponent.createRef<HTMLSpanElement>();
+  private readonly listRef = FSComponent.createRef<HTMLDivElement>();
 
   private pollHandle = 0;
 
@@ -46,7 +55,19 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
     super.onAfterRender(node);
     setRadioVolume(this.volume.get());
     this.nowPlaying.sub(() => this.updateMarquee());
+
+    // One delegated click handler for the whole station list (rows carry data-idx).
+    this.listRef.instance?.addEventListener("click", (e) => {
+      const row = (e.target as HTMLElement).closest("[data-idx]");
+      if (row) this.toggleStation(parseInt(row.getAttribute("data-idx") ?? "-1", 10));
+    });
+
     this.pollHandle = window.setInterval(() => this.poll(), 300);
+  }
+
+  public destroy(): void {
+    if (this.pollHandle) window.clearInterval(this.pollHandle);
+    super.destroy();
   }
 
   /** Animate the now-playing text only when it overflows its container; otherwise leave it still. */
@@ -67,27 +88,32 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
     });
   }
 
-  public destroy(): void {
-    if (this.pollHandle) window.clearInterval(this.pollHandle);
-    super.destroy();
-  }
-
   private poll(): void {
     const s = readStatus();
     this.radioPlaying = s.radioPlaying;
     this.gateOpen.set(s.gateOpen);
+    this.syncStations();
 
     // Adopt the companion's station if it's already playing when the app opens.
     if (s.radioPlaying && this.selectedIdx < 0) this.select(s.radioIdx);
 
     if (this.selectedIdx >= 0) {
-      const name = Stations[this.selectedIdx] ?? "station";
+      const name = this.stations[this.selectedIdx] ?? "station";
       this.nowPlaying.set(s.radioPlaying ? `Radio: ${name}` : `Radio (paused): ${name}`);
     } else if (s.localPlaying) {
       this.nowPlaying.set(readNowPlayingText() || "Local media playing");
     } else {
       this.nowPlaying.set("Idle");
     }
+  }
+
+  private syncStations(): void {
+    const names = readStations();
+    const key = names.join("");
+    if (key === this.stationsKey) return; // unchanged
+    this.stationsKey = key;
+    this.stations = names;
+    for (let i = 0; i < MAX_STATIONS; i++) this.nameSubs[i].set(names[i] ?? "");
   }
 
   private select(index: number): void {
@@ -97,6 +123,7 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
   /** Tapping a station starts it; tapping the selected one again stops + deselects it. */
   private toggleStation(index: number): void {
+    if (index < 0 || index >= this.stations.length) return;
     if (index === this.selectedIdx) {
       this.select(-1);
       radioStop();
@@ -129,13 +156,23 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
   }
 
   private onNext(): void {
-    if (this.selectedIdx >= 0) this.playStation((this.selectedIdx + 1) % Stations.length);
+    const n = this.stations.length;
+    if (this.selectedIdx >= 0 && n > 0) this.playStation((this.selectedIdx + 1) % n);
     else localNext();
   }
 
   private onPrev(): void {
-    if (this.selectedIdx >= 0) this.playStation((this.selectedIdx - 1 + Stations.length) % Stations.length);
+    const n = this.stations.length;
+    if (this.selectedIdx >= 0 && n > 0) this.playStation((this.selectedIdx - 1 + n) % n);
     else localPrev();
+  }
+
+  private stationRowClass(i: number): MappedSubject<[string, number], string> {
+    return MappedSubject.create(
+      ([name, sel]): string => (name === "" ? "station hidden" : sel === i ? "station selected" : "station"),
+      this.nameSubs[i],
+      this.selectedSub,
+    );
   }
 
   public render(): TVNode<HTMLDivElement> {
@@ -173,11 +210,11 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
         <section class="block radio">
           <h3>Radio</h3>
-          <div class="station-list">
-            {Stations.map((name, i) => (
-              <div class={this.selectedSub.map((p) => (p === i ? "station selected" : "station"))}>
+          <div class="station-list" ref={this.listRef}>
+            {this.nameSubs.map((nameSub, i) => (
+              <div data-idx={i} class={this.stationRowClass(i)}>
                 <span class="marker">{this.selectedSub.map((p) => (p === i ? ">" : ""))}</span>
-                <TTButton key={name} type="secondary" callback={(): void => this.toggleStation(i)} />
+                <span class="label">{nameSub}</span>
               </div>
             ))}
           </div>

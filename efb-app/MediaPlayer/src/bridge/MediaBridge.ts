@@ -43,14 +43,8 @@ export const Cmd = {
   RadioPlayBase: 100,
 } as const;
 
-/** Station list shown in the EFB. Mirrors the companion defaults until list-sync (client data) lands. */
-export const Stations: readonly string[] = [
-  "SomaFM - Groove Salad",
-  "SomaFM - Drone Zone",
-  "Radio Paradise - Main Mix",
-  "Radio Paradise - Mellow Mix",
-  "Radio Bob - Harte Saite",
-];
+/** Max stations the EFB renders; mirrors MAX_STATIONS_TX in the companion. */
+export const MAX_STATIONS = 12;
 
 export function sendCommand(code: number): void {
   SimVar.SetSimVarValue(LVar.Cmd, NUMBER, code);
@@ -67,24 +61,37 @@ export function setRadioVolume(volume0to100: number): void {
   SimVar.SetSimVarValue(LVar.RadioVol, NUMBER, v);
 }
 
-// Now-playing text packed into numeric LVARs by the companion (LVARs are the only EFB-readable
-// channel). 6 Latin-1 chars per double × 10 = 60 chars; char 0 terminates. Must match
-// SimConnectBridge.cs.
-const NP_SLOTS = 16;
-const NP_CHARS_PER_SLOT = 6;
+// Text packed into numeric LVARs by the companion (LVARs are the only EFB-readable channel).
+// 6 Latin-1 chars per double; char 0 terminates. Must match SimConnectBridge.cs.
+const CHARS_PER_SLOT = 6;
+const NP_SLOTS = 16; // now-playing: 96 chars
+const NAME_SLOTS = 6; // station name: 36 chars
 
-/** Decode the companion's packed now-playing text. Empty string = nothing. */
-export function readNowPlayingText(): string {
+/** Decode a packed string spanning `slots` consecutive LVARs starting at `prefix``base`. */
+function readPacked(prefix: string, base: number, slots: number): string {
   let out = "";
-  for (let slot = 0; slot < NP_SLOTS; slot++) {
-    const value = SimVar.GetSimVarValue(`L:MEDIAPLAYER_NP${slot}`, NUMBER);
-    for (let k = 0; k < NP_CHARS_PER_SLOT; k++) {
+  for (let s = 0; s < slots; s++) {
+    const value = SimVar.GetSimVarValue(`${prefix}${base + s}`, NUMBER);
+    for (let k = 0; k < CHARS_PER_SLOT; k++) {
       const code = Math.floor(value / 256 ** k) % 256;
       if (code === 0) return out;
       out += String.fromCharCode(code);
     }
   }
   return out;
+}
+
+/** Decode the companion's packed now-playing text. Empty string = nothing. */
+export function readNowPlayingText(): string {
+  return readPacked("L:MEDIAPLAYER_NP", 0, NP_SLOTS);
+}
+
+/** Decode the station list the companion pushed (its configured stations). */
+export function readStations(): string[] {
+  const count = Math.min(MAX_STATIONS, SimVar.GetSimVarValue("L:MEDIAPLAYER_STATION_COUNT", NUMBER));
+  const names: string[] = [];
+  for (let i = 0; i < count; i++) names.push(readPacked("L:MEDIAPLAYER_STN", i * NAME_SLOTS, NAME_SLOTS));
+  return names;
 }
 
 export interface MediaStatus {
