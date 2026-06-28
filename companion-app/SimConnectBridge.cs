@@ -72,6 +72,7 @@ internal sealed class SimConnectBridge : IDisposable
     // One-shot re-push a couple seconds after FlightLoaded, in case the event fires before MSFS
     // finishes zeroing the L:vars (the immediate re-push would then be wiped).
     private readonly System.Windows.Forms.Timer _repushTimer;
+    private int _repushesLeft;
     private SimConnect? _sc;
     private bool _disposed;
 
@@ -101,8 +102,8 @@ internal sealed class SimConnectBridge : IDisposable
         _window = new MessageWindow(HandleMessage);
         _reconnectTimer = new System.Windows.Forms.Timer { Interval = 3000 };
         _reconnectTimer.Tick += (_, _) => TryConnect();
-        _repushTimer = new System.Windows.Forms.Timer { Interval = 2500 };
-        _repushTimer.Tick += (_, _) => { _repushTimer.Stop(); RepushBridgeState(); };
+        _repushTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        _repushTimer.Tick += (_, _) => RepushTick();
     }
 
     public void Start()
@@ -158,9 +159,26 @@ internal sealed class SimConnectBridge : IDisposable
     {
         if ((SysEvent)data.uEventID != SysEvent.FlightLoaded) return;
         Log.Info("SimConnect: FlightLoaded — re-pushing bridge state");
-        RepushBridgeState();              // immediate
+        ScheduleRepushes();
+    }
+
+    /// <summary>
+    /// Push bridge state now, then repeatedly for ~10s. MSFS zeroes L:vars during/after a flight
+    /// load over an interval that outlasts a single write, and the EFB panel can open at any point,
+    /// so a few spaced re-pushes guarantee the station list/now-playing/gate land and stick.
+    /// </summary>
+    private void ScheduleRepushes()
+    {
+        RepushBridgeState();
+        _repushesLeft = 5;        // 5 × 2s ≈ 10s of backups
         _repushTimer.Stop();
-        _repushTimer.Start();             // and again after the L:vars settle (race backup)
+        _repushTimer.Start();
+    }
+
+    private void RepushTick()
+    {
+        RepushBridgeState();
+        if (--_repushesLeft <= 0) _repushTimer.Stop();
     }
 
     private void RepushBridgeState()
@@ -196,9 +214,9 @@ internal sealed class SimConnectBridge : IDisposable
                 DefineLvar(DEF_STATION_BASE + n, $"{LVAR_STN_PREFIX}{n}");
 
             _lvarsReady = true;
-            _lastNp = ""; // force a re-push of now-playing text on (re)connect
-            WriteLvar(DEF_STATUS_GATE, _gate >= 0.5f ? 1 : 0); // push initial gate
-            WriteStationList(); // push the station list on (re)connect
+            // Push state now and a few more times: on first start the companion often connects while
+            // the flight is still loading, and MSFS keeps zeroing L:vars past the first write.
+            ScheduleRepushes();
             Log.Info("SimConnect: LVAR bridge ready");
         }
         catch (Exception ex)
