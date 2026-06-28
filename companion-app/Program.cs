@@ -22,7 +22,7 @@ internal static class Program
         }
 
         Log.Init();
-        Log.Info("Companion starting (v0.1.0)");
+        Log.Info($"Companion starting (v{UpdateChecker.Current})");
 
         ApplicationConfiguration.Initialize();
         Application.Run(new TrayApplicationContext());

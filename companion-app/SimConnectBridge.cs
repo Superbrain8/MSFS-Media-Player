@@ -73,6 +73,10 @@ internal sealed class SimConnectBridge : IDisposable
     // finishes zeroing the L:vars (the immediate re-push would then be wiped).
     private readonly System.Windows.Forms.Timer _repushTimer;
     private int _repushesLeft;
+    // Latches once the EFB app announces itself (its first volume write). On a cold start the EFB
+    // tablet may open well after the companion connects — until it does, L:vars don't exist and our
+    // writes bounce (UNRECOGNIZED_ID). Re-push when the EFB first appears so the list always lands.
+    private bool _efbSeen;
     private SimConnect? _sc;
     private bool _disposed;
 
@@ -102,7 +106,7 @@ internal sealed class SimConnectBridge : IDisposable
         _window = new MessageWindow(HandleMessage);
         _reconnectTimer = new System.Windows.Forms.Timer { Interval = 3000 };
         _reconnectTimer.Tick += (_, _) => TryConnect();
-        _repushTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        _repushTimer = new System.Windows.Forms.Timer { Interval = 1500 };
         _repushTimer.Tick += (_, _) => RepushTick();
     }
 
@@ -163,14 +167,15 @@ internal sealed class SimConnectBridge : IDisposable
     }
 
     /// <summary>
-    /// Push bridge state now, then repeatedly for ~10s. MSFS zeroes L:vars during/after a flight
-    /// load over an interval that outlasts a single write, and the EFB panel can open at any point,
-    /// so a few spaced re-pushes guarantee the station list/now-playing/gate land and stick.
+    /// Re-push bridge state a few times over the next ~9s. Deliberately does NOT write immediately:
+    /// right after connect the data definitions were only just queued, and writing before SimConnect
+    /// registers them is rejected with UNRECOGNIZED_ID. The first timer tick writes once the
+    /// definitions are live; the repeats also cover MSFS zeroing L:vars during a flight load and the
+    /// EFB panel opening at any point.
     /// </summary>
     private void ScheduleRepushes()
     {
-        RepushBridgeState();
-        _repushesLeft = 5;        // 5 × 2s ≈ 10s of backups
+        _repushesLeft = 6;        // 6 × 1.5s ≈ 9s
         _repushTimer.Stop();
         _repushTimer.Start();
     }
@@ -344,6 +349,12 @@ internal sealed class SimConnectBridge : IDisposable
         if (id == DEF_VOL)
         {
             VolumeReceived?.Invoke((int)Math.Clamp(value, 0, 100));
+            if (!_efbSeen)
+            {
+                _efbSeen = true;
+                Log.Info("EFB detected (volume write) — re-pushing bridge state");
+                ScheduleRepushes();
+            }
             return;
         }
 
@@ -378,8 +389,25 @@ internal sealed class SimConnectBridge : IDisposable
         Disconnect();
     }
 
+    // Collapse repeats: writing the station list before the EFB tablet is open produces a burst of
+    // identical UNRECOGNIZED_ID exceptions (the L:vars don't exist yet). Log the first, then a count.
+    private SIMCONNECT_EXCEPTION _lastException = (SIMCONNECT_EXCEPTION)0xFFFF;
+    private int _lastExceptionRepeat;
+
     private void OnException(SimConnect sender, SIMCONNECT_RECV_EXCEPTION data)
-        => Log.Warn($"SimConnect exception: {(SIMCONNECT_EXCEPTION)data.dwException}");
+    {
+        var ex = (SIMCONNECT_EXCEPTION)data.dwException;
+        if (ex == _lastException)
+        {
+            _lastExceptionRepeat++;
+            return;
+        }
+        if (_lastExceptionRepeat > 0)
+            Log.Warn($"SimConnect exception: {_lastException} (repeated ×{_lastExceptionRepeat})");
+        _lastException = ex;
+        _lastExceptionRepeat = 0;
+        Log.Warn($"SimConnect exception: {ex}");
+    }
 
     private void HandleMessage(ref Message m)
     {
@@ -397,6 +425,7 @@ internal sealed class SimConnectBridge : IDisposable
         bool wasConnected = Connected || _sc is not null;
         Connected = false;
         _lvarsReady = false;
+        _efbSeen = false;
         try { _sc?.Dispose(); } catch { /* best effort */ }
         _sc = null;
         if (wasConnected)
