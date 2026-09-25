@@ -14,6 +14,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly NotifyIcon _trayIcon;
 
     private readonly MediaController _media = new();
+    private readonly EdgeVolumeController _edgeVolume = new();
     private readonly ToolStripMenuItem _nowPlayingItem;
     private readonly ToolStripMenuItem _playPauseItem;
     private readonly ToolStripMenuItem _nextItem;
@@ -159,7 +160,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
             case 2: _ = _media.NextAsync(); break;
             case 3: _ = _media.PreviousAsync(); break;
             case 10: _radio.Stop(); break;
-            case >= 100: PlayStation(code - 100); break;
+            // Separate command range for music volume. Do not reuse the radio LVAR: the EFB
+            // writes its initial radio volume as a connection handshake when the tablet opens.
+            case >= 200 and <= 300: _edgeVolume.SetVolume(code - 200); break;
+            case >= 100 and < 112: PlayStation(code - 100); break;
             default: Log.Warn($"Unknown EFB command code: {code}"); break;
         }
     }

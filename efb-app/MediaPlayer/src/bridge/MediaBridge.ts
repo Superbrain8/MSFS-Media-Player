@@ -41,6 +41,8 @@ export const Cmd = {
   RadioStop: 10,
   /** Play station N → RadioPlayBase + N. */
   RadioPlayBase: 100,
+  /** Edge media audio-session volume 0..100 → LocalVolumeBase + percentage. */
+  LocalVolumeBase: 200,
 } as const;
 
 /** Max stations the EFB renders; mirrors MAX_STATIONS_TX in the companion. */
@@ -55,6 +57,12 @@ export const localNext = (): void => sendCommand(Cmd.LocalNext);
 export const localPrev = (): void => sendCommand(Cmd.LocalPrev);
 export const radioStop = (): void => sendCommand(Cmd.RadioStop);
 export const radioPlay = (index: number): void => sendCommand(Cmd.RadioPlayBase + index);
+
+/** Route a user-initiated music-volume change separately from the radio-volume handshake. */
+export function setLocalVolume(volume0to100: number): void {
+  const v = Math.max(0, Math.min(100, Math.round(volume0to100)));
+  sendCommand(Cmd.LocalVolumeBase + v);
+}
 
 export function setRadioVolume(volume0to100: number): void {
   const v = Math.max(0, Math.min(100, Math.round(volume0to100)));

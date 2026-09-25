@@ -12,6 +12,7 @@ import {
   readStations,
   readStatus,
   setRadioVolume,
+  setLocalVolume,
 } from "../bridge/MediaBridge";
 import "./MediaControlPage.scss";
 
@@ -33,6 +34,9 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
   /** The user-selected station index (persists through pause), -1 if none. Drives the highlight. */
   private readonly selectedSub = Subject.create(-1);
   private readonly volume = Subject.create(INITIAL_VOLUME);
+  private readonly volumeLabel = Subject.create("Music volume (Edge)");
+  private localVolume = INITIAL_VOLUME;
+  private radioVolume = INITIAL_VOLUME;
 
   // Station list from the companion. Fixed MAX_STATIONS rows are rendered; each name Subject is ""
   // for absent stations (those rows hide). `stations` holds the current names for transport logic.
@@ -115,6 +119,8 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
   private select(index: number): void {
     this.selectedIdx = index;
     this.selectedSub.set(index);
+    this.volume.set(index >= 0 ? this.radioVolume : this.localVolume);
+    this.volumeLabel.set(index >= 0 ? "Radio volume" : "Music volume (Edge)");
   }
 
   /** Tapping a station starts it; tapping the selected one again stops + deselects it. */
@@ -137,7 +143,13 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
 
   private onVolume(value: number): void {
     this.volume.set(value);
-    setRadioVolume(value);
+    if (this.selectedIdx >= 0) {
+      this.radioVolume = value;
+      setRadioVolume(value);
+    } else {
+      this.localVolume = value;
+      setLocalVolume(value);
+    }
   }
 
   // Transport drives the radio while a station is selected (Play/Pause toggles the stream but keeps
@@ -198,7 +210,7 @@ export class MediaControlPage extends GamepadUiView<HTMLDivElement, MediaControl
         </section>
 
         <section class="block">
-          <h3>Volume</h3>
+          <h3>{this.volumeLabel}</h3>
           <div class="volume-row">
             <Slider value={this.volume} min={0} max={100} step={5} onValueChange={(v): void => this.onVolume(v)} />
             <span class="volume-pct">{this.volume.map((v) => `${Math.round(v)}%`)}</span>
